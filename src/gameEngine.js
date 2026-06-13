@@ -90,6 +90,12 @@ export function resetBall(ball, point) {
   ball.spin = 0;
 }
 
+export function applyBumperImpulse(ball, bumper) {
+  ball.vx = bumper.impulseX;
+  ball.vy = bumper.impulseY;
+  return Math.hypot(ball.vx, ball.vy);
+}
+
 export function getMoverRect(mover, time) {
   if (mover.path === 'orbit') {
     const angle = time * mover.speed + (mover.phase || 0);

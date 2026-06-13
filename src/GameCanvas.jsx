@@ -3,6 +3,7 @@ import { assetUrl } from './assets';
 import {
   WORLD,
   activateSwitch,
+  applyBumperImpulse,
   circleRectCollision,
   getMoverRect,
   getPhaseWalls,
@@ -300,6 +301,28 @@ function drawSwitch(ctx, item, active, time, art) {
     ctx.restore();
     return;
   }
+  if (item.action === 'hoop') {
+    ctx.strokeStyle = active ? '#f2d68a' : '#d4c5a7';
+    ctx.lineWidth = 4;
+    ctx.shadowColor = active ? '#f0cf73' : 'rgba(231, 214, 179, .42)';
+    ctx.shadowBlur = active ? 16 : 8;
+    ctx.beginPath();
+    ctx.moveTo(-item.r * 0.72, item.r * 0.75);
+    ctx.lineTo(-item.r * 0.72, 0);
+    ctx.quadraticCurveTo(0, -item.r * 1.12, item.r * 0.72, 0);
+    ctx.lineTo(item.r * 0.72, item.r * 0.75);
+    ctx.stroke();
+    ctx.fillStyle = active ? '#d34d61' : '#8f4055';
+    ctx.beginPath();
+    ctx.moveTo(-item.r * 0.82, -item.r * 0.2);
+    ctx.lineTo(item.r * 0.82, -item.r * 0.2);
+    ctx.lineTo(item.r * 0.55, item.r * 0.12);
+    ctx.lineTo(-item.r * 0.55, item.r * 0.12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
   ctx.fillStyle = active ? '#c9a85d' : '#5e5570';
   ctx.strokeStyle = active ? '#fae1a1' : '#a89cbf';
   ctx.lineWidth = 2;
@@ -316,6 +339,32 @@ function drawSwitch(ctx, item, active, time, art) {
     : item.action === 'phase' ? '♟'
     : item.minRadius ? '⚖' : active ? '✓' : item.symbol || '?';
   ctx.fillText(symbol, 0, 1 + Math.sin(time / 300));
+  ctx.restore();
+}
+
+function drawBumper(ctx, bumper, art, time) {
+  ctx.save();
+  ctx.translate(bumper.x, bumper.y);
+  const angle = Math.atan2(bumper.impulseY, bumper.impulseX) + Math.PI / 2;
+  ctx.rotate(angle + Math.sin(time / 420 + bumper.x) * 0.04);
+  if (art.flamingo?.complete) {
+    const size = bumper.artSize || 58;
+    const width = size * 0.67;
+    ctx.shadowColor = '#d36f8c';
+    ctx.shadowBlur = 12;
+    ctx.drawImage(art.flamingo, -width / 2, -size * 0.58, width, size);
+  } else {
+    ctx.strokeStyle = '#df8ca1';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(0, 18);
+    ctx.quadraticCurveTo(-14, 2, 0, -18);
+    ctx.stroke();
+    ctx.fillStyle = '#e9a2b3';
+    ctx.beginPath();
+    ctx.arc(0, -20, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -573,6 +622,7 @@ export default function GameCanvas({
   resetToken,
   onCollect,
   onPaint,
+  onBumper,
   onSwitch,
   onDeath,
   onLockedDoor,
@@ -581,8 +631,24 @@ export default function GameCanvas({
   const canvasRef = useRef(null);
   const stateRef = useRef(null);
   const artRef = useRef({});
-  const callbacksRef = useRef({ onCollect, onPaint, onSwitch, onDeath, onLockedDoor, onComplete });
-  callbacksRef.current = { onCollect, onPaint, onSwitch, onDeath, onLockedDoor, onComplete };
+  const callbacksRef = useRef({
+    onCollect,
+    onPaint,
+    onBumper,
+    onSwitch,
+    onDeath,
+    onLockedDoor,
+    onComplete,
+  });
+  callbacksRef.current = {
+    onCollect,
+    onPaint,
+    onBumper,
+    onSwitch,
+    onDeath,
+    onLockedDoor,
+    onComplete,
+  };
 
   useEffect(() => {
     const garden = new Image();
@@ -612,6 +678,9 @@ export default function GameCanvas({
     const chessPawn = new Image();
     chessPawn.crossOrigin = 'anonymous';
     chessPawn.src = assetUrl('assets/art/mirror-chess-pawn.png');
+    const flamingo = new Image();
+    flamingo.crossOrigin = 'anonymous';
+    flamingo.src = assetUrl('assets/art/flamingo-mallet.png');
     artRef.current = {
       garden,
       avatar,
@@ -622,6 +691,7 @@ export default function GameCanvas({
       cameo,
       teaTable,
       chessPawn,
+      flamingo,
     };
   }, []);
 
@@ -640,6 +710,7 @@ export default function GameCanvas({
       sequenceIndex: 0,
       rotations: new Map((level.rotators || []).map((rotator) => [rotator.id, 0])),
       phases: new Map((level.phases || []).map((phase) => [phase.id, phase.initial || 0])),
+      bumperCooldowns: new Map(),
       particles: [],
       shakeUntil: 0,
       startedAt: performance.now(),
@@ -705,6 +776,16 @@ export default function GameCanvas({
           friction: onIce ? 0.996 : 0.982,
           maxSpeed: onIce ? 5.8 : 4.8,
         });
+
+        for (const bumper of level.bumpers || []) {
+          const cooldown = state.bumperCooldowns.get(bumper.id) || 0;
+          if (time < cooldown || !overlapsItem(state.player, bumper)) continue;
+          applyBumperImpulse(state.player, bumper);
+          state.bumperCooldowns.set(bumper.id, time + (bumper.cooldown || 720));
+          state.shakeUntil = time + 90;
+          spawnBurst(state, bumper.x, bumper.y, '#e597aa', 12);
+          callbacksRef.current.onBumper?.(bumper);
+        }
 
         for (const item of level.items || []) {
           if (state.collected.has(item.id) || !overlapsItem(state.player, item)) continue;
@@ -860,6 +941,7 @@ export default function GameCanvas({
         drawRotator(ctx, rotator, getRotatorWalls(rotator, turn), turn, time, artRef.current);
       });
       movers.forEach((mover) => drawMover(ctx, mover, artRef.current));
+      (level.bumpers || []).forEach((bumper) => drawBumper(ctx, bumper, artRef.current, time));
       (level.hazards || []).forEach((hazard) => drawHazard(ctx, hazard, time));
       (level.portals || []).forEach((portal) => drawPortal(ctx, portal, time, artRef.current.teacup));
 

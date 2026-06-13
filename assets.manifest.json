@@ -62,6 +62,11 @@
       "description": "Original split black-and-white watercolor chess pawn for the looking-glass phase puzzle"
     },
     {
+      "path": "assets/art/flamingo-mallet.png",
+      "sha256": "7fb327b32ba086865a5bd6db0cfbd529c6233a53f4e01aae32ea7d955bbda64e",
+      "description": "Original watercolor reluctant flamingo croquet-mallet bumper sprite"
+    },
+    {
       "path": "assets/audio/rabbit-hole-bgm.mp3",
       "sha256": "07fbc52b04d3ba65e6753763a9e19326c332522a7f1ac1135a6bf367bcf6348a",
       "description": "BGM extracted from BV1ZK411B7cv, part 25, 不思議の国"

@@ -55,6 +55,17 @@ test('stores branch choice, deaths, and reset state', () => {
   assert.deepEqual(clearProgress(), initialProgress);
 });
 
+test('stores independent choices at multiple story forks', () => {
+  const earlyFork = getLevel('caterpillar-crossroad');
+  const lateFork = getLevel('queen-garden');
+  const early = chooseBranch(initialProgress, earlyFork, earlyFork.choices[1]);
+  const late = chooseBranch(early, lateFork, lateFork.choices[1]);
+  assert.equal(late.choices[earlyFork.id], 'tea');
+  assert.equal(late.choices[lateFork.id], 'croquet');
+  assert.ok(late.unlocked.includes('mad-tea-party'));
+  assert.ok(late.unlocked.includes('queen-croquet'));
+});
+
 test('grades attempts using time, mistakes, and hidden curiosity', () => {
   const level = getLevel('rabbit-fall');
   assert.equal(calculateLevelGrade(level, level.parTime, 0, true), 3);

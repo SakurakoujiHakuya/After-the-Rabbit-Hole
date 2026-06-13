@@ -151,7 +151,7 @@ function ChapterScreen({ progress, onSelect, onBack }) {
             >
               <span className="chapter-number">{String(level.order).padStart(2, '0')}</span>
               <div>
-                <small>{level.chapter}{level.branch ? ` · ${level.branch === 'tea' ? '茶会支线' : '蘑菇支线'}` : ''}</small>
+                <small>{level.chapter}{level.branch ? ` · ${level.branchLabel || `${level.branch}支线`}` : ''}</small>
                 <strong>{level.name}</strong>
                 <em>
                   {unlocked
@@ -262,6 +262,7 @@ function LevelInterlude({ level, result, onContinue }) {
 
 function Ending({ progress, onChapters, onReplay }) {
   const branch = progress.choices['caterpillar-crossroad'];
+  const lateBranch = progress.choices['queen-garden'];
   const curiosityCount = Object.values(progress.curiosities).filter((items) => items?.length).length;
   const crownCount = Object.values(progress.grades).reduce((total, grade) => total + grade, 0);
   const foundEveryCameo = curiosityCount === levels.length;
@@ -274,9 +275,11 @@ function Ending({ progress, onChapters, onReplay }) {
       <div className="title-divider dark"><span>◆</span></div>
       <blockquote>
         {foundEveryCameo ? (
-          <>九枚浮雕在晨光里拼成一只白兔。<br />它终于停下怀表，<br />向她问了自己的名字。</>
+          <>所有浮雕在晨光里拼成一只白兔。<br />它终于停下怀表，<br />向她问了自己的名字。</>
         ) : (
-          <>{branch === 'tea' ? '她带着茶会停住的时间，' : '她带着蘑菇改变的身体，'}<br />
+          <>
+            {branch === 'tea' ? '她带着茶会停住的时间，' : '她带着蘑菇改变的身体，'}<br />
+            {lateBranch === 'croquet' ? '也带着槌球场弯曲的规则，' : '也带着镜中黑白交替的道路，'}<br />
             亲口说出了那个<br />
             世界无法替她定义的名字。</>
         )}
@@ -508,6 +511,11 @@ export default function App() {
     emitEvent('rose_painted', { levelId: level.id, roseId: rose.id, count });
   };
 
+  const handleBumper = () => {
+    setToast('火烈鸟忽然伸直脖子，把爱丽丝弹了出去。');
+    if (navigator.vibrate) navigator.vibrate(35);
+  };
+
   const handleSwitch = (trigger) => {
     setActivated(trigger.activeIds || []);
     if (trigger.rotationId) {
@@ -661,6 +669,7 @@ export default function App() {
             resetToken={resetToken}
             onCollect={handleCollect}
             onPaint={handlePaint}
+            onBumper={handleBumper}
             onSwitch={handleSwitch}
             onDeath={handleDeath}
             onLockedDoor={() => setToast(level.lockedHint || '门仍在等待缺少的证据。')}
@@ -681,11 +690,17 @@ export default function App() {
                   {collected.some((item) => item.id === id) ? '✓' : '◇'} 道具
                 </span>
               ))}
-              {(level.goal.requires?.switches || []).map((id, index) => (
-                <span key={id} className={activated.includes(id) ? 'done' : ''}>
-                  {activated.includes(id) ? '✓' : level.switchSequence ? index + 1 : '○'} 印章
-                </span>
-              ))}
+              {(level.goal.requires?.switches || []).map((id, index) => {
+                const trigger = level.switches?.find((entry) => entry.id === id);
+                const label = trigger?.action === 'hoop'
+                  ? '球门'
+                  : trigger?.action === 'phase' ? '棋子' : '印章';
+                return (
+                  <span key={id} className={activated.includes(id) ? 'done' : ''}>
+                    {activated.includes(id) ? '✓' : level.switchSequence ? index + 1 : '○'} {label}
+                  </span>
+                );
+              })}
               {level.goal.requires?.fragments && (
                 <span className={fragmentItems.length >= level.goal.requires.fragments ? 'done' : ''}>
                   {fragmentItems.length}/{level.goal.requires.fragments} 名字

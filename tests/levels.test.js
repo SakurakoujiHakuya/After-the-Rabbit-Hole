@@ -51,6 +51,11 @@ test('uses valid references throughout the chapter graph', () => {
     for (const next of level.next || []) assert.ok(levelById[next], `${level.id} -> ${next}`);
     for (const choice of level.choices || []) {
       assert.ok(levelById[choice.next], `${level.id} choice -> ${choice.next}`);
+      assert.equal(
+        levelById[choice.next].branch,
+        choice.id,
+        `${level.id} choice ${choice.id} must match target branch`,
+      );
     }
   }
 });
@@ -98,6 +103,7 @@ test('keeps starts, goals, items, switches, and portals outside walls', () => {
       ...(level.switches || []).map((item) => [`switch:${item.id}`, item]),
       ...(level.portals || []).map((item) => [`portal:${item.id}`, item]),
       ...(level.paintables || []).map((item) => [`paintable:${item.id}`, item]),
+      ...(level.bumpers || []).map((item) => [`bumper:${item.id}`, item]),
     ];
     for (const [name, point] of points) {
       const player = { ...point, radius: 1 };
@@ -106,6 +112,22 @@ test('keeps starts, goals, items, switches, and portals outside walls', () => {
         false,
         `${level.id} ${name} overlaps a wall`,
       );
+    }
+  }
+});
+
+test('defines reachable croquet routes with valid flamingo impulses', () => {
+  for (const level of levels.filter((entry) => entry.bumpers?.length)) {
+    const hoops = level.switches.filter((entry) => entry.action === 'hoop');
+    assert.ok(hoops.length >= 3, `${level.id} needs a staged hoop route`);
+    for (const bumper of level.bumpers) {
+      assert.ok(Number.isFinite(bumper.impulseX));
+      assert.ok(Number.isFinite(bumper.impulseY));
+      assert.ok(Math.hypot(bumper.impulseX, bumper.impulseY) <= 6);
+      assert.equal(canReach(level, {}, bumper), true, `${level.id} cannot reach ${bumper.id}`);
+    }
+    for (const hoop of hoops) {
+      assert.equal(canReach(level, {}, hoop), true, `${level.id} cannot reach ${hoop.id}`);
     }
   }
 });

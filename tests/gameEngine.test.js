@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   activateSwitch,
+  applyBumperImpulse,
   circleRectCollision,
   getMoverRect,
   getPhaseWalls,
@@ -44,6 +45,14 @@ test('moves orbit hazards around their configured center', () => {
   assert.equal(position.x, 135);
   assert.equal(position.y, 75);
   assert.equal(position.angle, 0);
+});
+
+test('applies a configured flamingo bumper impulse', () => {
+  const ball = makeBall({ x: 10, y: 10 });
+  const speed = applyBumperImpulse(ball, { impulseX: 3, impulseY: -4 });
+  assert.equal(ball.vx, 3);
+  assert.equal(ball.vy, -4);
+  assert.equal(speed, 5);
 });
 
 test('checks collected items, switches, and name fragments', () => {
