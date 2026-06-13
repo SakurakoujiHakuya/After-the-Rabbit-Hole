@@ -16,6 +16,18 @@ const levelList = [
     parTime: 35000,
     hint: '顺着白兔留下的脚印，学习控制速度',
     quote: '她追着一只迟到的白影，掉进了一个没有方向的地方。',
+    story: [
+      {
+        speaker: '白兔',
+        portrait: 'rabbit',
+        text: '迟了，迟了！公爵夫人的钟可不会等一个迷路的小姑娘。',
+      },
+      {
+        speaker: '爱丽丝',
+        portrait: 'alice',
+        text: '它会说话，还穿着背心。既然洞已经把我吞下去，我总得看看它通向哪里。',
+      },
+    ],
     start: { x: 55, y: 568 },
     goal: { x: 284, y: 38, w: 42, h: 52 },
     next: ['hall-of-doors'],
@@ -40,6 +52,25 @@ const levelList = [
     hint: '先取钥匙，再踩亮玫瑰印章',
     lockedHint: '锁孔轻声说：还缺一件事情。',
     quote: '钥匙能打开门，却不能替她决定该走向哪里。',
+    story: [
+      {
+        speaker: '旁白',
+        portrait: 'key',
+        text: '长桌上放着一把小金钥匙。它能打开最矮的门，可爱丽丝还是太大了。',
+      },
+      {
+        speaker: '爱丽丝',
+        portrait: 'alice',
+        text: '先找到钥匙，再问门肯不肯讲道理。这里的顺序似乎比大小更重要。',
+      },
+    ],
+    eventStories: {
+      'collect:gold-key': {
+        speaker: '爱丽丝',
+        portrait: 'alice',
+        text: '正是那把金钥匙。现在只差让玫瑰印章承认我来过。',
+      },
+    },
     start: { x: 53, y: 570 },
     goal: {
       x: 286,
@@ -76,6 +107,18 @@ const levelList = [
     parTime: 60000,
     hint: '水流会推着你走，避开深蓝色漩涡',
     quote: '她哭出一片海，随后不得不学会在自己的眼泪里游泳。',
+    story: [
+      {
+        speaker: '爱丽丝',
+        portrait: 'alice',
+        text: '我一会儿变大，一会儿变小，连眼泪都积成了池塘。哭完以后，路还是得自己找。',
+      },
+      {
+        speaker: '渡渡鸟的声音',
+        portrait: 'rabbit',
+        text: '大家都湿透了。至于谁赢了比赛，当然是每个人都赢了。',
+      },
+    ],
     start: { x: 52, y: 568 },
     goal: { x: 282, y: 38, w: 44, h: 52 },
     next: ['caterpillar-crossroad'],
@@ -110,6 +153,23 @@ const levelList = [
     parTime: 70000,
     hint: '镜面会反转左右，点亮两枚问号印章',
     quote: '毛毛虫只问了三个字：“你是谁？” 她却没有答案。',
+    story: [
+      {
+        speaker: '毛毛虫',
+        portrait: 'caterpillar',
+        text: '你，是，谁？',
+      },
+      {
+        speaker: '爱丽丝',
+        portrait: 'alice',
+        text: '今天早晨我还知道。可变了这么多次以后，我不敢说自己还是同一个人。',
+      },
+      {
+        speaker: '毛毛虫',
+        portrait: 'caterpillar',
+        text: '蘑菇的一边使你长高，另一边使你变矮。至于哪一边是哪一边，你自己试。',
+      },
+    ],
     start: { x: 180, y: 570 },
     goal: {
       x: 159,
@@ -163,6 +223,18 @@ const levelList = [
     parTime: 75000,
     hint: '蓝药水使你变小，饼干使你变大',
     quote: '身体改变了尺寸，问题却没有因此变小。',
+    story: [
+      {
+        speaker: '毛毛虫',
+        portrait: 'caterpillar',
+        text: '尺寸不是答案，只是一种通行证。小路偏爱小人，沉重的蘑菇盖却只听大人的。',
+      },
+      {
+        speaker: '爱丽丝',
+        portrait: 'alice',
+        text: '那么我就保留两种自己，需要哪一种时再决定。',
+      },
+    ],
     start: { x: 55, y: 568 },
     goal: {
       x: 284,
@@ -206,6 +278,23 @@ const levelList = [
     parTime: 75000,
     hint: '踩下回转曲柄，让茶桌改成通往门的方向',
     quote: '他们不断换座位，因为时间拒绝再向前走。',
+    story: [
+      {
+        speaker: '帽匠',
+        portrait: 'hatter',
+        text: '这里永远是六点。时间和我吵了一架，从此不肯再走。',
+      },
+      {
+        speaker: '三月兔',
+        portrait: 'rabbit',
+        text: '没位置了！没位置了！虽然桌边明明空着一大圈。',
+      },
+      {
+        speaker: '爱丽丝',
+        portrait: 'alice',
+        text: '如果他们只会换座位，我就把整张桌子转到正确的方向。',
+      },
+    ],
     start: { x: 52, y: 568 },
     goal: {
       x: 284,
@@ -288,6 +377,30 @@ const levelList = [
     parTime: 90000,
     hint: '提起油漆桶，把三朵白玫瑰染红；第二朵会保存位置',
     quote: '规则走来走去，喊着要砍掉所有不合规则的东西。',
+    story: [
+      {
+        speaker: '纸牌园丁',
+        portrait: 'card',
+        text: '我们错种了白玫瑰。女王只要红色，看见以前必须把它们涂好。',
+      },
+      {
+        speaker: '红心女王',
+        portrait: 'queen',
+        text: '谁准花园里出现错误？先判决，再找证据！',
+      },
+      {
+        speaker: '爱丽丝',
+        portrait: 'alice',
+        text: '她的规则只是她的脾气。可在找到出口以前，我得先穿过这些纸牌。',
+      },
+    ],
+    eventStories: {
+      'paint:queen-rose-2': {
+        speaker: '纸牌园丁',
+        portrait: 'card',
+        text: '中间这朵记住了你的位置。女王若把你赶走，花园会偷偷送你回来。',
+      },
+    },
     start: { x: 52, y: 570 },
     goal: {
       x: 283,
@@ -350,6 +463,18 @@ const levelList = [
     parTime: 105000,
     hint: '依次唤醒三枚棋子；黑白交替时，镜门会封住旧路并打开新路',
     quote: '她向前走了两步，却看见自己从另一边靠近。',
+    story: [
+      {
+        speaker: '镜中的红后',
+        portrait: 'queen',
+        text: '在这里，你必须拼命奔跑，才能留在原地。若想到别处，还得跑得更快。',
+      },
+      {
+        speaker: '爱丽丝',
+        portrait: 'alice',
+        text: '棋盘每醒来一次，路就换一种颜色。我要按它的回合前进，而不是只看眼前。',
+      },
+    ],
     start: { x: 54, y: 570 },
     goal: {
       x: 283,
@@ -408,8 +533,47 @@ const levelList = [
     name: '球门总在临时改口',
     mechanic: '火烈鸟弹射与顺序球门',
     parTime: 105000,
-    hint: '借火烈鸟改变速度，依次穿过三道球门；越往后越需要提前修正方向',
+    hint: '撞醒发光的火烈鸟，让它把你击进同号球门；得分会开启下一赛道',
     quote: '女王说规则很简单：只要她赢，规则就永远正确。',
+    story: [
+      {
+        speaker: '红心女王',
+        portrait: 'queen',
+        text: '槌球的规则很简单：火烈鸟是球槌，刺猬是球，纸牌士兵弯腰充当球门。然后由我获胜。',
+      },
+      {
+        speaker: '火烈鸟',
+        portrait: 'flamingo',
+        text: '嘎。我们偶尔会把头转开，因为没有谁问过我们想不想当球槌。',
+      },
+      {
+        speaker: '爱丽丝',
+        portrait: 'alice',
+        text: '那就合作一次。每只火烈鸟负责一道同号球门，得分以后下一只才会醒来。',
+      },
+    ],
+    eventStories: {
+      'bumper:flamingo-1': {
+        speaker: '火烈鸟一号',
+        portrait: 'flamingo',
+        text: '第一杆！穿过金色虚线尽头的一号门。',
+      },
+      'switch:croquet-hoop-1': {
+        speaker: '纸牌裁判',
+        portrait: 'card',
+        text: '一号球门得分。下层闸门开启，二号火烈鸟醒了。',
+      },
+      'switch:croquet-hoop-2': {
+        speaker: '红心女王',
+        portrait: 'queen',
+        text: '谁允许你连续得分？把纸牌巡逻再加快一点！',
+      },
+      'switch:croquet-hoop-3': {
+        speaker: '火烈鸟',
+        portrait: 'flamingo',
+        text: '三道球门都承认了这次击球。现在轮到女王遵守自己的规则。',
+      },
+    },
     start: { x: 52, y: 570 },
     goal: {
       x: 283,
@@ -422,38 +586,72 @@ const levelList = [
     items: [{ id: 'cameo-croquet', type: 'curiosity', x: 52, y: 72, r: 11 }],
     switchSequence: ['croquet-hoop-1', 'croquet-hoop-2', 'croquet-hoop-3'],
     switches: [
-      { id: 'croquet-hoop-1', action: 'hoop', x: 292, y: 520, r: 20 },
-      { id: 'croquet-hoop-2', action: 'hoop', x: 66, y: 326, r: 20 },
-      { id: 'croquet-hoop-3', action: 'hoop', x: 292, y: 136, r: 20 },
+      {
+        id: 'croquet-hoop-1',
+        action: 'hoop',
+        order: 1,
+        requiresBumper: 'flamingo-1',
+        x: 292,
+        y: 520,
+        r: 20,
+      },
+      {
+        id: 'croquet-hoop-2',
+        action: 'hoop',
+        order: 2,
+        requiresBumper: 'flamingo-2',
+        x: 66,
+        y: 326,
+        r: 20,
+      },
+      {
+        id: 'croquet-hoop-3',
+        action: 'hoop',
+        order: 3,
+        requiresBumper: 'flamingo-3',
+        x: 292,
+        y: 136,
+        r: 20,
+      },
     ],
     bumpers: [
       {
         id: 'flamingo-1',
+        targetHoopId: 'croquet-hoop-1',
         x: 86,
         y: 548,
         r: 18,
-        impulseX: 4.8,
-        impulseY: -2.1,
+        impulseX: 5.4,
+        impulseY: -0.74,
         artSize: 58,
       },
       {
         id: 'flamingo-2',
+        targetHoopId: 'croquet-hoop-2',
+        requiresSwitches: ['croquet-hoop-1'],
         x: 286,
         y: 354,
         r: 18,
-        impulseX: -4.8,
-        impulseY: -2.4,
+        impulseX: -5.4,
+        impulseY: -0.7,
         artSize: 58,
       },
       {
         id: 'flamingo-3',
+        targetHoopId: 'croquet-hoop-3',
+        requiresSwitches: ['croquet-hoop-2'],
         x: 72,
         y: 164,
         r: 18,
-        impulseX: 4.8,
-        impulseY: -2.6,
+        impulseX: 5.4,
+        impulseY: -0.7,
         artSize: 58,
       },
+    ],
+    gates: [
+      { id: 'croquet-lane-1', switchId: 'croquet-hoop-1', x: 242, y: 486, w: 100, h: 18 },
+      { id: 'croquet-lane-2', switchId: 'croquet-hoop-2', x: 242, y: 294, w: 100, h: 18 },
+      { id: 'croquet-lane-3', switchId: 'croquet-hoop-3', x: 242, y: 102, w: 100, h: 18 },
     ],
     movers: [
       { id: 'croquet-card-1', type: 'card', x: 120, y: 434, w: 48, h: 15, axis: 'x', range: 150, speed: 0.0018 },
@@ -478,6 +676,30 @@ const levelList = [
     parTime: 120000,
     hint: '找回三个词，旋转法庭，再点亮证词印章',
     quote: '当所有人都要求她证明自己，她终于决定亲口说出答案。',
+    story: [
+      {
+        speaker: '红心国王',
+        portrait: 'queen',
+        text: '审判失窃的馅饼！先宣读最重要的证据：凡是不合适的证据，都不算证据。',
+      },
+      {
+        speaker: '红心女王',
+        portrait: 'queen',
+        text: '先砍头，再宣判！',
+      },
+      {
+        speaker: '爱丽丝',
+        portrait: 'alice',
+        text: '你们不过是一副纸牌。我的名字不需要由这座法庭批准。',
+      },
+    ],
+    eventStories: {
+      'collect:name-3': {
+        speaker: '爱丽丝',
+        portrait: 'alice',
+        text: '我。记得。自己。三个词已经足够让我站在这里。',
+      },
+    },
     start: { x: 180, y: 572 },
     goal: {
       x: 159,

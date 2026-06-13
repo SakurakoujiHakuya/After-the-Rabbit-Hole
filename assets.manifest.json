@@ -62,6 +62,21 @@
       "description": "Original split black-and-white watercolor chess pawn for the looking-glass phase puzzle"
     },
     {
+      "path": "assets/art/red-queen-portrait.jpg",
+      "sha256": "ae98b51b05fc833d30726d617a9ff848cf9080acf3904e32d984a70b1da51c94",
+      "description": "Original watercolor chibi Red Queen dialogue portrait"
+    },
+    {
+      "path": "assets/art/mad-hatter-portrait.jpg",
+      "sha256": "19a5b558718a0ac74a467ffb9a74c63c5ae32804f9349e3653488f7227936b8b",
+      "description": "Original watercolor chibi Mad Hatter dialogue portrait"
+    },
+    {
+      "path": "assets/art/caterpillar-portrait.jpg",
+      "sha256": "74469370f4bc60e3b4dc1c561496a62a6179bfd23ba4eb2e50a5dae1b574b071",
+      "description": "Original watercolor chibi Caterpillar dialogue portrait"
+    },
+    {
       "path": "assets/art/flamingo-mallet.png",
       "sha256": "7fb327b32ba086865a5bd6db0cfbd529c6233a53f4e01aae32ea7d955bbda64e",
       "description": "Original watercolor reluctant flamingo croquet-mallet bumper sprite"

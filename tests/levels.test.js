@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { circleRectCollision, getPhaseWalls, getRotatorWalls } from '../src/gameEngine.js';
+import {
+  applyBumperImpulse,
+  circleRectCollision,
+  getPhaseWalls,
+  getRotatorWalls,
+  makeBall,
+  overlapsItem,
+  updateBall,
+} from '../src/gameEngine.js';
 import { levels, levelById } from '../src/levels.js';
 
 function canReach(level, turns, target, phaseStates = {}, start = level.start) {
@@ -119,14 +127,42 @@ test('keeps starts, goals, items, switches, and portals outside walls', () => {
 test('defines reachable croquet routes with valid flamingo impulses', () => {
   for (const level of levels.filter((entry) => entry.bumpers?.length)) {
     const hoops = level.switches.filter((entry) => entry.action === 'hoop');
+    const bumperIds = new Set(level.bumpers.map((entry) => entry.id));
     assert.ok(hoops.length >= 3, `${level.id} needs a staged hoop route`);
-    for (const bumper of level.bumpers) {
+    assert.equal(level.gates?.length, hoops.length, `${level.id} needs one lane gate per hoop`);
+    for (const [index, bumper] of level.bumpers.entries()) {
+      const target = hoops.find((entry) => entry.id === bumper.targetHoopId);
+      assert.ok(target, `${level.id} ${bumper.id} needs a target hoop`);
+      assert.equal(target.requiresBumper, bumper.id);
+      if (index > 0) assert.deepEqual(bumper.requiresSwitches, [hoops[index - 1].id]);
       assert.ok(Number.isFinite(bumper.impulseX));
       assert.ok(Number.isFinite(bumper.impulseY));
       assert.ok(Math.hypot(bumper.impulseX, bumper.impulseY) <= 6);
+      const targetDx = target.x - bumper.x;
+      const targetDy = target.y - bumper.y;
+      const alignment = (
+        targetDx * bumper.impulseX + targetDy * bumper.impulseY
+      ) / (
+        Math.hypot(targetDx, targetDy) *
+        Math.hypot(bumper.impulseX, bumper.impulseY)
+      );
+      assert.ok(alignment > 0.98, `${level.id} ${bumper.id} does not aim at its hoop`);
+      const launchedBall = makeBall(bumper);
+      applyBumperImpulse(launchedBall, bumper);
+      let scoredWithoutSteering = false;
+      for (let frame = 0; frame < 180 && !scoredWithoutSteering; frame += 1) {
+        updateBall(launchedBall, { x: 0, y: 0 }, level.walls, 16.667);
+        scoredWithoutSteering = overlapsItem(launchedBall, target);
+      }
+      assert.equal(
+        scoredWithoutSteering,
+        true,
+        `${level.id} ${bumper.id} cannot score its hoop without steering`,
+      );
       assert.equal(canReach(level, {}, bumper), true, `${level.id} cannot reach ${bumper.id}`);
     }
     for (const hoop of hoops) {
+      assert.ok(bumperIds.has(hoop.requiresBumper));
       assert.equal(canReach(level, {}, hoop), true, `${level.id} cannot reach ${hoop.id}`);
     }
   }
@@ -173,6 +209,10 @@ test('gives every chapter one hidden curiosity and a target time', () => {
     );
     assert.equal(Number.isFinite(level.parTime), true, `${level.id} needs a par time`);
     assert.ok(level.parTime > 0, `${level.id} par time must be positive`);
+    assert.ok(level.story?.length >= 2, `${level.id} needs a visible story introduction`);
+    for (const scene of level.story) {
+      assert.ok(scene.speaker && scene.text && scene.portrait, `${level.id} has an incomplete story scene`);
+    }
   }
 });
 

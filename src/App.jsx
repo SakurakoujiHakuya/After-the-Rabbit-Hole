@@ -227,6 +227,67 @@ function PauseModal({ onResume, onRestart, onChapters, onQuit }) {
   );
 }
 
+const storyPortraits = {
+  alice: 'assets/art/alice-avatar.png',
+  rabbit: 'assets/art/white-rabbit.png',
+  key: 'assets/art/rabbit-cameo.png',
+  caterpillar: 'assets/art/caterpillar-portrait.jpg',
+  hatter: 'assets/art/mad-hatter-portrait.jpg',
+  watch: 'assets/art/pocket-watch.png',
+  card: 'assets/art/card-guard.png',
+  queen: 'assets/art/red-queen-portrait.jpg',
+  flamingo: 'assets/art/flamingo-mallet.png',
+};
+
+function StoryPortrait({ portrait }) {
+  const source = storyPortraits[portrait] || storyPortraits.alice;
+  return <img src={assetUrl(source)} alt="" />;
+}
+
+function StoryPanel({ level, index, onAdvance, onSkip }) {
+  const scene = level.story?.[index];
+  if (!scene) return null;
+  const finalScene = index === level.story.length - 1;
+  return (
+    <div className="modal-backdrop story-backdrop">
+      <section className="story-panel">
+        <div className="story-chapter">
+          <small>{level.eyebrow}</small>
+          <strong>{level.name}</strong>
+        </div>
+        <StoryPortrait portrait={scene.portrait} />
+        <div className="story-copy">
+          <span>{scene.speaker}</span>
+          <p>{scene.text}</p>
+        </div>
+        <div className="story-progress" aria-label={`剧情 ${index + 1}/${level.story.length}`}>
+          {level.story.map((_, sceneIndex) => (
+            <i key={sceneIndex} className={sceneIndex <= index ? 'active' : ''} />
+          ))}
+        </div>
+        <button className="primary-button" onClick={onAdvance}>
+          {finalScene ? '进入这一章' : '继续听'}
+        </button>
+        <button className="text-button" onClick={onSkip}>跳过本章剧情</button>
+      </section>
+    </div>
+  );
+}
+
+function StoryBeat({ beat, onClose }) {
+  if (!beat) return null;
+  return (
+    <aside className="story-beat" aria-live="polite" onClick={onClose}>
+      <StoryPortrait portrait={beat.portrait} />
+      <div>
+        <strong>{beat.speaker}</strong>
+        <p>{beat.text}</p>
+      </div>
+      <button aria-label="关闭剧情提示">×</button>
+    </aside>
+  );
+}
+
 function LevelInterlude({ level, result, onContinue }) {
   return (
     <div className="modal-backdrop interlude">
@@ -309,6 +370,10 @@ export default function App() {
   const [resetToken, setResetToken] = useState(0);
   const [interlude, setInterlude] = useState(false);
   const [toast, setToast] = useState('');
+  const [storyOpen, setStoryOpen] = useState(Boolean(debugLevelId));
+  const [storyIndex, setStoryIndex] = useState(0);
+  const [storyBeat, setStoryBeat] = useState(null);
+  const [seenStoryEvents, setSeenStoryEvents] = useState([]);
   const [collected, setCollected] = useState([]);
   const [activated, setActivated] = useState([]);
   const [rotations, setRotations] = useState({});
@@ -375,6 +440,10 @@ export default function App() {
     setPainted([]);
     setRunDeaths(0);
     setLastResult(null);
+    setStoryIndex(0);
+    setStoryOpen(Boolean(getLevel(targetLevelId).story?.length));
+    setStoryBeat(null);
+    setSeenStoryEvents([]);
     setPaused(false);
     setResetToken((value) => value + 1);
     setScreen('game');
@@ -469,12 +538,28 @@ export default function App() {
     return () => clearTimeout(timeout);
   }, [toast]);
 
+  useEffect(() => {
+    if (!storyBeat) return undefined;
+    const timeout = setTimeout(() => setStoryBeat(null), 5200);
+    return () => clearTimeout(timeout);
+  }, [storyBeat]);
+
+  const revealStoryEvent = (eventKey) => {
+    if (seenStoryEvents.includes(eventKey)) return;
+    const beat = level.eventStories?.[eventKey];
+    if (!beat) return;
+    setSeenStoryEvents((events) => [...events, eventKey]);
+    setStoryBeat(beat);
+  };
+
   const restart = () => {
     setCollected([]);
     setActivated([]);
     setRotations({});
     setPhases({});
     setPainted([]);
+    setStoryBeat(null);
+    setSeenStoryEvents([]);
     setRunDeaths(0);
     setPaused(false);
     setResetToken((value) => value + 1);
@@ -497,6 +582,8 @@ export default function App() {
       curiosity: '你找到了一枚藏起来的兔子浮雕。',
     };
     setToast(messages[item.type] || '机关发出了一声轻响。');
+    revealStoryEvent(`collect:${item.id}`);
+    revealStoryEvent(`collect:${item.type}`);
     emitEvent('item_collected', { levelId: level.id, itemType: item.type });
   };
 
@@ -507,18 +594,23 @@ export default function App() {
     setToast(rose.checkpoint
       ? `第 ${count} 朵玫瑰红了，并记住了你的位置。`
       : `白玫瑰变红了：${count}/${total}`);
+    revealStoryEvent(`paint:${rose.id}`);
     if (navigator.vibrate) navigator.vibrate([20, 25, 20]);
     emitEvent('rose_painted', { levelId: level.id, roseId: rose.id, count });
   };
 
-  const handleBumper = () => {
-    setToast('火烈鸟忽然伸直脖子，把爱丽丝弹了出去。');
+  const handleBumper = (bumper) => {
+    const hoop = level.switches?.find((entry) => entry.id === bumper.targetHoopId);
+    setToast(`火烈鸟 ${hoop?.order || ''} 号挥杆：沿金色虚线修正方向！`);
+    revealStoryEvent(`bumper:${bumper.id}`);
     if (navigator.vibrate) navigator.vibrate(35);
   };
 
   const handleSwitch = (trigger) => {
     setActivated(trigger.activeIds || []);
-    if (trigger.rotationId) {
+    if (trigger.sequenceStatus === 'needs-bumper') {
+      setToast(`这道球门只承认 ${trigger.order} 号火烈鸟击出的球。`);
+    } else if (trigger.rotationId) {
       setRotations(trigger.rotations || {});
       setToast(trigger.rotationTurn === 1 ? '房间转过了九十度。' : '房间回到了原来的方向。');
     } else if (trigger.phaseId) {
@@ -529,12 +621,15 @@ export default function App() {
     } else if (trigger.sequenceStatus === 'reset') {
       setToast('顺序错了。镜子把所有印章熄灭了。');
     } else if (trigger.sequenceStatus === 'complete') {
-      setToast('最后一枚印章回应了你。');
+      setToast(trigger.action === 'hoop' ? '第三道球门得分，女王的终点门被迫打开。' : '最后一枚印章回应了你。');
     } else if (trigger.sequenceStatus === 'correct') {
-      setToast(`顺序正确：${trigger.sequenceIndex}/${trigger.sequenceLength}`);
+      setToast(trigger.action === 'hoop'
+        ? `${trigger.order} 号球门得分，下一段赛道开启。`
+        : `顺序正确：${trigger.sequenceIndex}/${trigger.sequenceLength}`);
     } else {
       setToast('一枚印章亮了起来。');
     }
+    if (trigger.sequenceStatus !== 'needs-bumper') revealStoryEvent(`switch:${trigger.id}`);
     if (navigator.vibrate) navigator.vibrate(25);
   };
 
@@ -596,6 +691,10 @@ export default function App() {
     setPainted([]);
     setRunDeaths(0);
     setLastResult(null);
+    setStoryIndex(0);
+    setStoryOpen(Boolean(getLevel(nextLevelId).story?.length));
+    setStoryBeat(null);
+    setSeenStoryEvents([]);
     setResetToken((value) => value + 1);
   };
 
@@ -665,7 +764,7 @@ export default function App() {
           <GameCanvas
             level={level}
             gravityRef={gravityRef}
-            paused={paused || interlude}
+            paused={paused || interlude || storyOpen}
             resetToken={resetToken}
             onCollect={handleCollect}
             onPaint={handlePaint}
@@ -749,6 +848,7 @@ export default function App() {
 
         {controlMode === 'joystick' && <Joystick gravityRef={inputRef} />}
         {toast && <div className="toast">{toast}</div>}
+        <StoryBeat beat={storyBeat} onClose={() => setStoryBeat(null)} />
         {paused && (
           <PauseModal
             onResume={() => setPaused(false)}
@@ -761,6 +861,20 @@ export default function App() {
               setPaused(false);
               setScreen('start');
             }}
+          />
+        )}
+        {storyOpen && (
+          <StoryPanel
+            level={level}
+            index={storyIndex}
+            onAdvance={() => {
+              if (storyIndex < level.story.length - 1) {
+                setStoryIndex((value) => value + 1);
+              } else {
+                setStoryOpen(false);
+              }
+            }}
+            onSkip={() => setStoryOpen(false)}
           />
         )}
         {interlude && <LevelInterlude level={level} result={lastResult} onContinue={continueAfterLevel} />}

@@ -4,10 +4,12 @@ import {
   WORLD,
   activateSwitch,
   applyBumperImpulse,
+  canScoreLinkedHoop,
   circleRectCollision,
   getMoverRect,
   getPhaseWalls,
   getRotatorWalls,
+  isBumperEnabled,
   makeBall,
   overlapsItem,
   pointInRect,
@@ -320,6 +322,11 @@ function drawSwitch(ctx, item, active, time, art) {
     ctx.lineTo(-item.r * 0.55, item.r * 0.12);
     ctx.closePath();
     ctx.fill();
+    ctx.fillStyle = active ? '#fff1c4' : '#f0dfbd';
+    ctx.font = `bold ${Math.max(10, item.r * 0.62)}px Georgia`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(item.order || '', 0, -item.r * 0.02);
     ctx.restore();
     return;
   }
@@ -342,16 +349,33 @@ function drawSwitch(ctx, item, active, time, art) {
   ctx.restore();
 }
 
-function drawBumper(ctx, bumper, art, time) {
+function drawCroquetLink(ctx, bumper, target, active, time) {
+  if (!target) return;
+  ctx.save();
+  ctx.strokeStyle = active
+    ? `rgba(241, 210, 139, ${0.42 + Math.sin(time / 220) * 0.12})`
+    : 'rgba(177, 166, 177, .12)';
+  ctx.lineWidth = active ? 2 : 1;
+  ctx.setLineDash(active ? [7, 7] : [3, 9]);
+  ctx.beginPath();
+  ctx.moveTo(bumper.x, bumper.y);
+  ctx.lineTo(target.x, target.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawBumper(ctx, bumper, art, time, active) {
   ctx.save();
   ctx.translate(bumper.x, bumper.y);
   const angle = Math.atan2(bumper.impulseY, bumper.impulseX) + Math.PI / 2;
   ctx.rotate(angle + Math.sin(time / 420 + bumper.x) * 0.04);
+  ctx.globalAlpha = active ? 1 : 0.3;
   if (art.flamingo?.complete) {
     const size = bumper.artSize || 58;
     const width = size * 0.67;
-    ctx.shadowColor = '#d36f8c';
-    ctx.shadowBlur = 12;
+    ctx.shadowColor = active ? '#d36f8c' : 'transparent';
+    ctx.shadowBlur = active ? 12 : 0;
     ctx.drawImage(art.flamingo, -width / 2, -size * 0.58, width, size);
   } else {
     ctx.strokeStyle = '#df8ca1';
@@ -364,6 +388,14 @@ function drawBumper(ctx, bumper, art, time) {
     ctx.beginPath();
     ctx.arc(0, -20, 8, 0, Math.PI * 2);
     ctx.fill();
+  }
+  if (active) {
+    ctx.rotate(-angle);
+    ctx.strokeStyle = `rgba(244, 218, 158, ${0.35 + Math.sin(time / 180) * 0.16})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, bumper.r + 7 + Math.sin(time / 230) * 2, 0, Math.PI * 2);
+    ctx.stroke();
   }
   ctx.restore();
 }
@@ -711,9 +743,13 @@ export default function GameCanvas({
       rotations: new Map((level.rotators || []).map((rotator) => [rotator.id, 0])),
       phases: new Map((level.phases || []).map((phase) => [phase.id, phase.initial || 0])),
       bumperCooldowns: new Map(),
+      lastBumperId: null,
+      bumperLinkUntil: 0,
       particles: [],
       shakeUntil: 0,
       startedAt: performance.now(),
+      pauseBeganAt: null,
+      pausedDuration: 0,
     };
   }, [level, resetToken]);
 
@@ -758,6 +794,13 @@ export default function GameCanvas({
         ))
         : [];
 
+      if (state && paused && state.pauseBeganAt === null) {
+        state.pauseBeganAt = time;
+      } else if (state && !paused && state.pauseBeganAt !== null) {
+        state.pausedDuration += time - state.pauseBeganAt;
+        state.pauseBeganAt = null;
+      }
+
       if (state && !paused && !state.complete) {
         const mirrorZone = (level.zones || []).find((zone) => zone.type === 'mirror' && pointInRect(state.player, zone));
         const currentZones = (level.zones || []).filter((zone) => zone.type === 'current' && pointInRect(state.player, zone));
@@ -778,10 +821,13 @@ export default function GameCanvas({
         });
 
         for (const bumper of level.bumpers || []) {
+          if (!isBumperEnabled(bumper, state.switches)) continue;
           const cooldown = state.bumperCooldowns.get(bumper.id) || 0;
           if (time < cooldown || !overlapsItem(state.player, bumper)) continue;
           applyBumperImpulse(state.player, bumper);
           state.bumperCooldowns.set(bumper.id, time + (bumper.cooldown || 720));
+          state.lastBumperId = bumper.id;
+          state.bumperLinkUntil = time + (bumper.linkDuration || 3200);
           state.shakeUntil = time + 90;
           spawnBurst(state, bumper.x, bumper.y, '#e597aa', 12);
           callbacksRef.current.onBumper?.(bumper);
@@ -819,6 +865,22 @@ export default function GameCanvas({
         for (const trigger of level.switches || []) {
           if (!touchingSwitches.has(trigger.id) || state.touchingSwitches.has(trigger.id)) continue;
           if (trigger.minRadius && state.player.radius < trigger.minRadius) continue;
+          if (
+            trigger.action === 'hoop' &&
+            !canScoreLinkedHoop(
+              trigger,
+              state.lastBumperId,
+              state.bumperLinkUntil,
+              time,
+            )
+          ) {
+            callbacksRef.current.onSwitch({
+              ...trigger,
+              sequenceStatus: 'needs-bumper',
+              activeIds: [...state.switches],
+            });
+            continue;
+          }
           if (trigger.action === 'rotate') {
             const rotator = (level.rotators || []).find((entry) => entry.id === trigger.target);
             if (rotator) {
@@ -880,6 +942,10 @@ export default function GameCanvas({
           );
           state.switches = result.switches;
           state.sequenceIndex = result.sequenceIndex;
+          if (trigger.action === 'hoop' && result.status !== 'reset') {
+            state.lastBumperId = null;
+            state.bumperLinkUntil = 0;
+          }
           if (result.status === 'reset') {
             state.shakeUntil = time + 120;
           } else {
@@ -915,7 +981,10 @@ export default function GameCanvas({
         if (circleRectCollision(state.player, level.goal)) {
           if (requirementsMet(level.goal.requires, state)) {
             state.complete = true;
-            callbacksRef.current.onComplete(time - state.startedAt, [...state.collected]);
+            callbacksRef.current.onComplete(
+              time - state.startedAt - state.pausedDuration,
+              [...state.collected],
+            );
           } else if (time > state.lockedCooldown) {
             state.lockedCooldown = time + 1200;
             state.player.vx *= -0.55;
@@ -941,7 +1010,15 @@ export default function GameCanvas({
         drawRotator(ctx, rotator, getRotatorWalls(rotator, turn), turn, time, artRef.current);
       });
       movers.forEach((mover) => drawMover(ctx, mover, artRef.current));
-      (level.bumpers || []).forEach((bumper) => drawBumper(ctx, bumper, artRef.current, time));
+      (level.bumpers || []).forEach((bumper) => {
+        const target = (level.switches || []).find((entry) => entry.id === bumper.targetHoopId);
+        const active = state ? isBumperEnabled(bumper, state.switches) : false;
+        drawCroquetLink(ctx, bumper, target, active, time);
+      });
+      (level.bumpers || []).forEach((bumper) => {
+        const active = state ? isBumperEnabled(bumper, state.switches) : false;
+        drawBumper(ctx, bumper, artRef.current, time, active);
+      });
       (level.hazards || []).forEach((hazard) => drawHazard(ctx, hazard, time));
       (level.portals || []).forEach((portal) => drawPortal(ctx, portal, time, artRef.current.teacup));
 

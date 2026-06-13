@@ -96,6 +96,15 @@ export function applyBumperImpulse(ball, bumper) {
   return Math.hypot(ball.vx, ball.vy);
 }
 
+export function isBumperEnabled(bumper, switches) {
+  return (bumper.requiresSwitches || []).every((id) => switches.has(id));
+}
+
+export function canScoreLinkedHoop(trigger, lastBumperId, linkUntil, time) {
+  if (!trigger.requiresBumper) return true;
+  return trigger.requiresBumper === lastBumperId && time <= linkUntil;
+}
+
 export function getMoverRect(mover, time) {
   if (mover.path === 'orbit') {
     const angle = time * mover.speed + (mover.phase || 0);

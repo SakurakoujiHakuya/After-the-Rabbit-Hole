@@ -42,4 +42,6 @@
 - 动态房间使用 `rotators` 和 `requirements.rotations`，仅采用 90 度离散旋转以保证移动端碰撞稳定。
 - 玫瑰染色使用 `paintables` 和 `requirements.painted`，染色检查点由 `checkpoint: true` 声明。
 - 变形地图使用 `phases[].wallsByState` 和 `requirements.phases`；机关只切换离散状态，避免动画墙碰撞不确定。
-- 火烈鸟弹射使用 `bumpers`，速度向量由 `impulseX` / `impulseY` 定义；顺序球门继续复用 `switchSequence`。
+- 每章使用 `story` 显示关前对白，关键收集物与机关可通过 `eventStories` 触发关中对白。
+- 火烈鸟弹射使用 `bumpers`，速度向量由 `impulseX` / `impulseY` 定义；`targetHoopId` 将球槌与球门绑定，后续火烈鸟由 `requiresSwitches` 逐段唤醒。
+- 槌球门使用 `requiresBumper` 校验最后一次有效击球，得分后打开对应 `gates`，不能再用普通移动绕过联动。

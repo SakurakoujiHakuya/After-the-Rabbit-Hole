@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import {
   activateSwitch,
   applyBumperImpulse,
+  canScoreLinkedHoop,
   circleRectCollision,
   getMoverRect,
   getPhaseWalls,
   getRotatorWalls,
+  isBumperEnabled,
   makeBall,
   requirementsMet,
   rotateRect,
@@ -53,6 +55,17 @@ test('applies a configured flamingo bumper impulse', () => {
   assert.equal(ball.vx, 3);
   assert.equal(ball.vy, -4);
   assert.equal(speed, 5);
+});
+
+test('links flamingos to their matching hoop and unlock sequence', () => {
+  const switches = new Set(['hoop-1']);
+  assert.equal(isBumperEnabled({ requiresSwitches: ['hoop-1'] }, switches), true);
+  assert.equal(isBumperEnabled({ requiresSwitches: ['hoop-2'] }, switches), false);
+
+  const hoop = { requiresBumper: 'flamingo-2' };
+  assert.equal(canScoreLinkedHoop(hoop, 'flamingo-2', 5000, 4500), true);
+  assert.equal(canScoreLinkedHoop(hoop, 'flamingo-1', 5000, 4500), false);
+  assert.equal(canScoreLinkedHoop(hoop, 'flamingo-2', 4000, 4500), false);
 });
 
 test('checks collected items, switches, and name fragments', () => {
