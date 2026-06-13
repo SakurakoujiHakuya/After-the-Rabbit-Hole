@@ -143,7 +143,7 @@ function drawDoor(ctx, goal, open, time) {
   ctx.restore();
 }
 
-function drawItem(ctx, item, time) {
+function drawItem(ctx, item, time, art) {
   ctx.save();
   ctx.translate(item.x, item.y + Math.sin(time / 420 + item.x) * 1.5);
   ctx.shadowBlur = 14;
@@ -212,6 +212,18 @@ function drawItem(ctx, item, time) {
       ctx.beginPath();
       ctx.ellipse(0, -11, 5, 8, 0, 0, Math.PI * 2);
       ctx.stroke();
+    }
+  } else if (item.type === 'curiosity') {
+    ctx.shadowColor = '#e7ca78';
+    ctx.shadowBlur = 18 + Math.sin(time / 250) * 3;
+    if (art.cameo?.complete) {
+      const size = 36 + Math.sin(time / 420) * 1.5;
+      ctx.drawImage(art.cameo, -size / 2, -size / 2, size, size);
+    } else {
+      ctx.fillStyle = '#e0c16f';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 8, 11, 0, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
   ctx.restore();
@@ -454,7 +466,10 @@ export default function GameCanvas({
     const watch = new Image();
     watch.crossOrigin = 'anonymous';
     watch.src = assetUrl('assets/art/pocket-watch.png');
-    artRef.current = { garden, avatar, teacup, cardGuard, mushroom, watch };
+    const cameo = new Image();
+    cameo.crossOrigin = 'anonymous';
+    cameo.src = assetUrl('assets/art/rabbit-cameo.png');
+    artRef.current = { garden, avatar, teacup, cardGuard, mushroom, watch, cameo };
   }, []);
 
   useEffect(() => {
@@ -582,7 +597,7 @@ export default function GameCanvas({
         if (circleRectCollision(state.player, level.goal)) {
           if (requirementsMet(level.goal.requires, state)) {
             state.complete = true;
-            callbacksRef.current.onComplete(time - state.startedAt);
+            callbacksRef.current.onComplete(time - state.startedAt, [...state.collected]);
           } else if (time > state.lockedCooldown) {
             state.lockedCooldown = time + 1200;
             state.player.vx *= -0.55;
@@ -610,7 +625,7 @@ export default function GameCanvas({
         drawDoor(ctx, level.goal, requirementsMet(level.goal.requires, state), time);
         (level.switches || []).forEach((item) => drawSwitch(ctx, item, state.switches.has(item.id), time));
         for (const item of level.items || []) {
-          if (!state.collected.has(item.id)) drawItem(ctx, item, time);
+          if (!state.collected.has(item.id)) drawItem(ctx, item, time, artRef.current);
         }
         const mirrored = (level.zones || []).some((zone) => zone.type === 'mirror' && pointInRect(state.player, zone));
         drawPlayer(ctx, state.player, artRef.current.avatar, time, mirrored);

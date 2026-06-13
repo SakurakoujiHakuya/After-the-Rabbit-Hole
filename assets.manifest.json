@@ -42,6 +42,11 @@
       "description": "Original watercolor key-marked mushroom landmark sprite"
     },
     {
+      "path": "assets/art/rabbit-cameo.png",
+      "sha256": "e2e04f4a7ed427c1f0726e1c0d9d5d74ca04ed35e7ce6a4b74dd1c66424744cc",
+      "description": "Original watercolor hidden rabbit cameo collectible sprite"
+    },
+    {
       "path": "assets/audio/rabbit-hole-bgm.mp3",
       "sha256": "07fbc52b04d3ba65e6753763a9e19326c332522a7f1ac1135a6bf367bcf6348a",
       "description": "BGM extracted from BV1ZK411B7cv, part 25, 不思議の国"

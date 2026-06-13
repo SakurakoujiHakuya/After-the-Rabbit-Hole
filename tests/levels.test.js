@@ -46,3 +46,15 @@ test('defines valid ordered switches and orbit hazards', () => {
     }
   }
 });
+
+test('gives every chapter one hidden curiosity and a target time', () => {
+  for (const level of levels) {
+    assert.equal(
+      (level.items || []).filter((item) => item.type === 'curiosity').length,
+      1,
+      `${level.id} must contain exactly one curiosity`,
+    );
+    assert.equal(Number.isFinite(level.parTime), true, `${level.id} needs a par time`);
+    assert.ok(level.parTime > 0, `${level.id} par time must be positive`);
+  }
+});

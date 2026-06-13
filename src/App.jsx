@@ -3,8 +3,10 @@ import GameCanvas from './GameCanvas';
 import { assetUrl } from './assets';
 import { firstLevelId, getLevel, levels } from './levels';
 import {
+  calculateLevelGrade,
   chooseBranch,
   clearProgress,
+  collectCuriosity,
   completeLevel,
   enterLevel,
   loadProgress,
@@ -17,6 +19,14 @@ const debugLevelId = import.meta.env.DEV
 
 function emitEvent(name, detail = {}) {
   window.dispatchEvent(new CustomEvent(`rabbit-hole:${name}`, { detail }));
+}
+
+function formatDuration(milliseconds) {
+  if (!milliseconds) return '';
+  const totalSeconds = Math.round(milliseconds / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, '0');
+  return minutes ? `${minutes}:${seconds}` : `${seconds}秒`;
 }
 
 function MusicButton({ muted, playing, onToggle }) {
@@ -96,7 +106,8 @@ function HowTo({ onClose }) {
         <h2>每一章只教你<br />一条新规则</h2>
         <div className="instruction-row"><span>↔</span><p>倾斜手机，让爱丽丝头像在玻璃球中滚动</p></div>
         <div className="instruction-row"><span>♙</span><p>观察机关：水流、镜面、印章、茶杯与纸牌</p></div>
-        <div className="instruction-row"><span>◇</span><p>章节中会出现分支，选择将被自动保存</p></div>
+        <div className="instruction-row"><span>♛</span><p>寻找兔子浮雕，以更少失误挑战三星评价</p></div>
+        <div className="instruction-row"><span>◇</span><p>章节分支、收藏和最佳成绩都会自动保存</p></div>
         <p className="small-copy">进度保存在当前浏览器中。传感器不可用时可使用触摸摇杆。</p>
         <button className="primary-button" onClick={onClose}>我记住了</button>
       </section>
@@ -107,6 +118,7 @@ function HowTo({ onClose }) {
 function ChapterScreen({ progress, onSelect, onBack }) {
   const completedCount = Object.keys(progress.completed).length;
   const chapterTotal = levels.length;
+  const curiosityCount = Object.values(progress.curiosities).filter((items) => items?.length).length;
   const storyComplete = Boolean(progress.completed['trial-of-names']);
   return (
     <main
@@ -119,7 +131,7 @@ function ChapterScreen({ progress, onSelect, onBack }) {
           <p className="kicker">CHAPTER BOOKMARKS</p>
           <h1>梦境书签</h1>
         </div>
-        <span>{completedCount}/{chapterTotal}</span>
+        <span>{completedCount}/{chapterTotal}<small>浮雕 {curiosityCount}/{chapterTotal}</small></span>
       </header>
       <div className="progress-track"><i style={{ width: `${Math.min(100, (completedCount / chapterTotal) * 100)}%` }} /></div>
       <section className="chapter-list">
@@ -128,6 +140,8 @@ function ChapterScreen({ progress, onSelect, onBack }) {
           const completed = Boolean(progress.completed[level.id]);
           const chosen = Object.values(progress.choices).includes(level.branch);
           const inaccessibleBranch = level.branch && !unlocked && Object.keys(progress.choices).length > 0 && !chosen;
+          const grade = progress.grades[level.id] || 0;
+          const foundCuriosity = Boolean(progress.curiosities[level.id]?.length);
           return (
             <button
               key={level.id}
@@ -139,9 +153,16 @@ function ChapterScreen({ progress, onSelect, onBack }) {
               <div>
                 <small>{level.chapter}{level.branch ? ` · ${level.branch === 'tea' ? '茶会支线' : '蘑菇支线'}` : ''}</small>
                 <strong>{level.name}</strong>
-                <em>{unlocked ? level.mechanic : inaccessibleBranch ? '另一条梦境支线' : '尚未解锁'}</em>
+                <em>
+                  {unlocked
+                    ? `${level.mechanic}${progress.bestTimes[level.id] ? ` · ${formatDuration(progress.bestTimes[level.id])}` : ''}`
+                    : inaccessibleBranch ? '另一条梦境支线' : '尚未解锁'}
+                </em>
               </div>
-              <b>{completed ? '✓' : unlocked ? '→' : '×'}</b>
+              <span className="chapter-reward">
+                <b>{grade ? '♛'.repeat(grade) : completed ? '✓' : unlocked ? '→' : '×'}</b>
+                <i className={foundCuriosity ? 'found' : ''}>{foundCuriosity ? '◉' : '○'}</i>
+              </span>
             </button>
           );
         })}
@@ -206,11 +227,18 @@ function PauseModal({ onResume, onRestart, onChapters, onQuit }) {
   );
 }
 
-function LevelInterlude({ level, onContinue }) {
+function LevelInterlude({ level, result, onContinue }) {
   return (
     <div className="modal-backdrop interlude">
       <section className="quote-card">
         <span className="quote-mark">“</span>
+        {result && (
+          <div className="chapter-result">
+            <strong>{'♛'.repeat(result.grade)}</strong>
+            <span>{formatDuration(result.duration)} · 失误 {result.deaths}</span>
+            <i>{result.foundCuriosity ? '兔子浮雕已收藏' : '兔子浮雕仍藏在本章'}</i>
+          </div>
+        )}
         <p>{level.quote}</p>
         <div className="title-divider"><span>◆</span></div>
         {level.choices ? (
@@ -234,6 +262,9 @@ function LevelInterlude({ level, onContinue }) {
 
 function Ending({ progress, onChapters, onReplay }) {
   const branch = progress.choices['caterpillar-crossroad'];
+  const curiosityCount = Object.values(progress.curiosities).filter((items) => items?.length).length;
+  const crownCount = Object.values(progress.grades).reduce((total, grade) => total + grade, 0);
+  const foundEveryCameo = curiosityCount === levels.length;
   return (
     <main className="screen ending-screen">
       <div className="dawn" />
@@ -242,10 +273,15 @@ function Ending({ progress, onChapters, onReplay }) {
       <h2>她终于想起了<br />自己的名字</h2>
       <div className="title-divider dark"><span>◆</span></div>
       <blockquote>
-        {branch === 'tea' ? '她带着茶会停住的时间，' : '她带着蘑菇改变的身体，'}<br />
-        亲口说出了那个<br />
-        世界无法替她定义的名字。
+        {foundEveryCameo ? (
+          <>九枚浮雕在晨光里拼成一只白兔。<br />它终于停下怀表，<br />向她问了自己的名字。</>
+        ) : (
+          <>{branch === 'tea' ? '她带着茶会停住的时间，' : '她带着蘑菇改变的身体，'}<br />
+            亲口说出了那个<br />
+            世界无法替她定义的名字。</>
+        )}
       </blockquote>
+      <p className="ending-collection">兔子浮雕 {curiosityCount}/{levels.length} · 皇冠 {crownCount}/{levels.length * 3}</p>
       <div className="ending-actions">
         <button className="primary-button dark-button" onClick={onChapters}>重访其他章节</button>
         <button className="text-button dark-text" onClick={onReplay}>从头再做一次选择</button>
@@ -272,6 +308,8 @@ export default function App() {
   const [toast, setToast] = useState('');
   const [collected, setCollected] = useState([]);
   const [activated, setActivated] = useState([]);
+  const [runDeaths, setRunDeaths] = useState(0);
+  const [lastResult, setLastResult] = useState(null);
   const inputRef = useRef({
     motion: { x: 0, y: 0 },
     keyboard: { x: 0, y: 0 },
@@ -326,6 +364,8 @@ export default function App() {
     setLevelId(targetLevelId);
     setCollected([]);
     setActivated([]);
+    setRunDeaths(0);
+    setLastResult(null);
     setPaused(false);
     setResetToken((value) => value + 1);
     setScreen('game');
@@ -423,6 +463,7 @@ export default function App() {
   const restart = () => {
     setCollected([]);
     setActivated([]);
+    setRunDeaths(0);
     setPaused(false);
     setResetToken((value) => value + 1);
     emitEvent('level_restart', { levelId: level.id });
@@ -430,6 +471,9 @@ export default function App() {
 
   const handleCollect = (item) => {
     setCollected((items) => [...items, item]);
+    if (item.type === 'curiosity') {
+      setProgress((current) => collectCuriosity(current, level.id, item.id));
+    }
     if (navigator.vibrate) navigator.vibrate(30);
     const messages = {
       key: '钥匙在你手里轻轻响了一声。',
@@ -437,6 +481,7 @@ export default function App() {
       cookie: '你变大了，连规则也开始后退。',
       fragment: `她想起了：“${item.word}”`,
       checkpoint: '红玫瑰记住了你的位置。',
+      curiosity: '你找到了一枚藏起来的兔子浮雕。',
     };
     setToast(messages[item.type] || '机关发出了一声轻响。');
     emitEvent('item_collected', { levelId: level.id, itemType: item.type });
@@ -457,8 +502,8 @@ export default function App() {
   };
 
   const handleDeath = (reason) => {
-    const nextProgress = recordDeath(progress, level.id);
-    setProgress(nextProgress);
+    setProgress((current) => recordDeath(current, level.id));
+    setRunDeaths((count) => count + 1);
     const messages = {
       card: '纸牌卫兵把你送回了玫瑰旁。',
       watch: '怀表追上了你，时间重新开始。',
@@ -468,12 +513,26 @@ export default function App() {
     if (navigator.vibrate) navigator.vibrate(90);
   };
 
-  const handleComplete = (duration) => {
+  const handleComplete = (duration, collectedIds = []) => {
     if (navigator.vibrate) navigator.vibrate([50, 40, 50]);
-    const nextProgress = completeLevel(progress, level, Math.round(duration));
-    setProgress(nextProgress);
+    const roundedDuration = Math.round(duration);
+    const curiosityIds = collectedIds.filter((id) => id.startsWith('cameo-'));
+    const foundCuriosity =
+      curiosityIds.length > 0 ||
+      Boolean(progress.curiosities[level.id]?.length);
+    const grade = calculateLevelGrade(level, roundedDuration, runDeaths, foundCuriosity);
+    setProgress((current) => completeLevel(current, level, roundedDuration, {
+      deaths: runDeaths,
+      curiosityIds,
+    }));
+    setLastResult({
+      grade,
+      duration: roundedDuration,
+      deaths: runDeaths,
+      foundCuriosity,
+    });
     setInterlude(true);
-    emitEvent('level_complete', { levelId: level.id, duration: Math.round(duration) });
+    emitEvent('level_complete', { levelId: level.id, duration: roundedDuration, grade });
   };
 
   const continueAfterLevel = (choice) => {
@@ -495,6 +554,8 @@ export default function App() {
     setLevelId(nextLevelId);
     setCollected([]);
     setActivated([]);
+    setRunDeaths(0);
+    setLastResult(null);
     setResetToken((value) => value + 1);
   };
 
@@ -580,21 +641,31 @@ export default function App() {
 
         <footer className="game-footer">
           <div className="hint-line"><span>✦</span><p>{level.hint}</p><span>✦</span></div>
-          {level.goal.requires && (
+          {(level.goal.requires || level.items?.some((item) => item.type === 'curiosity')) && (
             <div className="objective-strip" aria-label="当前目标">
-              {(level.goal.requires.items || []).map((id) => (
+              {(level.goal.requires?.items || []).map((id) => (
                 <span key={id} className={collected.some((item) => item.id === id) ? 'done' : ''}>
                   {collected.some((item) => item.id === id) ? '✓' : '◇'} 道具
                 </span>
               ))}
-              {(level.goal.requires.switches || []).map((id, index) => (
+              {(level.goal.requires?.switches || []).map((id, index) => (
                 <span key={id} className={activated.includes(id) ? 'done' : ''}>
                   {activated.includes(id) ? '✓' : level.switchSequence ? index + 1 : '○'} 印章
                 </span>
               ))}
-              {level.goal.requires.fragments && (
+              {level.goal.requires?.fragments && (
                 <span className={fragmentItems.length >= level.goal.requires.fragments ? 'done' : ''}>
                   {fragmentItems.length}/{level.goal.requires.fragments} 名字
+                </span>
+              )}
+              {level.items?.some((item) => item.type === 'curiosity') && (
+                <span className={
+                  collected.some((item) => item.type === 'curiosity') ||
+                  progress.curiosities[level.id]?.length
+                    ? 'done'
+                    : ''
+                }>
+                  ◉ 浮雕
                 </span>
               )}
             </div>
@@ -629,7 +700,7 @@ export default function App() {
             }}
           />
         )}
-        {interlude && <LevelInterlude level={level} onContinue={continueAfterLevel} />}
+        {interlude && <LevelInterlude level={level} result={lastResult} onContinue={continueAfterLevel} />}
       </main>
     );
   }
