@@ -60,6 +60,7 @@ test('keeps starts, goals, items, switches, and portals outside walls', () => {
       ...(level.items || []).map((item) => [`item:${item.id}`, item]),
       ...(level.switches || []).map((item) => [`switch:${item.id}`, item]),
       ...(level.portals || []).map((item) => [`portal:${item.id}`, item]),
+      ...(level.paintables || []).map((item) => [`paintable:${item.id}`, item]),
     ];
     for (const [name, point] of points) {
       const player = { ...point, radius: 1 };
@@ -68,6 +69,23 @@ test('keeps starts, goals, items, switches, and portals outside walls', () => {
         false,
         `${level.id} ${name} overlaps a wall`,
       );
+    }
+  }
+});
+
+test('defines reachable Alice-themed paint puzzles', () => {
+  for (const level of levels.filter((entry) => entry.paintables?.length)) {
+    const paintIds = new Set(level.paintables.map((entry) => entry.id));
+    const required = level.goal.requires?.painted || [];
+    assert.ok(
+      (level.items || []).some((item) => item.type === 'paint'),
+      `${level.id} needs a paint item`,
+    );
+    for (const id of required) {
+      assert.ok(paintIds.has(id), `${level.id} requires missing paintable ${id}`);
+    }
+    for (const rose of level.paintables) {
+      assert.equal(canReach(level, {}, rose), true, `${level.id} cannot reach ${rose.id}`);
     }
   }
 });

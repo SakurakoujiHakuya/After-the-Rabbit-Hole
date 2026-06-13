@@ -22,6 +22,11 @@
       "description": "Original anime storybook heroine avatar based on the user's style reference"
     },
     {
+      "path": "assets/art/alice-chibi-head.png",
+      "sha256": "faf289bdab2aea8b8a0bf47b9af097eed97e1727ed3455b81f4db911f24d9d2c",
+      "description": "Original head-only chibi Alice-inspired player sprite with a dazed expression"
+    },
+    {
       "path": "assets/art/teacup-portal.png",
       "sha256": "acf8f55f7005bc0be9a8b920926089d2c165137063657bb333d6aec3f5d1b8b0",
       "description": "Original watercolor enchanted teacup portal sprite"

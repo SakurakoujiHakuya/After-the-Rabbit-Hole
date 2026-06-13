@@ -184,6 +184,27 @@ function drawItem(ctx, item, time, art) {
         ctx.fill();
       }
     }
+  } else if (item.type === 'paint') {
+    ctx.shadowColor = '#cf4b5d';
+    ctx.fillStyle = '#e9d8b1';
+    ctx.strokeStyle = '#7c3343';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-9, -8);
+    ctx.lineTo(9, -8);
+    ctx.lineTo(7, 12);
+    ctx.quadraticCurveTo(0, 16, -7, 12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#b92843';
+    ctx.fillRect(-9, -8, 18, 6);
+    ctx.strokeStyle = '#d8b06d';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(5, -7);
+    ctx.lineTo(13, -18);
+    ctx.stroke();
   } else if (item.type === 'fragment') {
     ctx.shadowColor = '#f3dfad';
     ctx.fillStyle = '#ead9aa';
@@ -226,6 +247,39 @@ function drawItem(ctx, item, time, art) {
       ctx.ellipse(0, 0, 8, 11, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+  ctx.restore();
+}
+
+function drawPaintable(ctx, rose, painted, time) {
+  ctx.save();
+  ctx.translate(rose.x, rose.y);
+  const pulse = 1 + Math.sin(time / 360 + rose.x) * 0.035;
+  ctx.scale(pulse, pulse);
+  ctx.shadowColor = painted ? '#d34a5e' : 'rgba(245, 235, 211, .55)';
+  ctx.shadowBlur = painted ? 14 : 8;
+  ctx.strokeStyle = painted ? '#7f263a' : '#b9ad9f';
+  ctx.fillStyle = painted ? '#c83b53' : '#eee5d1';
+  ctx.lineWidth = 1.5;
+  for (let index = 0; index < 5; index += 1) {
+    ctx.save();
+    ctx.rotate((Math.PI * 2 * index) / 5);
+    ctx.beginPath();
+    ctx.ellipse(0, -rose.r * 0.48, rose.r * 0.36, rose.r * 0.55, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.fillStyle = painted ? '#e7b05e' : '#c8b98f';
+  ctx.beginPath();
+  ctx.arc(0, 0, rose.r * 0.26, 0, Math.PI * 2);
+  ctx.fill();
+  if (!painted) {
+    ctx.strokeStyle = 'rgba(201, 57, 78, .55)';
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath();
+    ctx.arc(0, 0, rose.r + 5, 0, Math.PI * 2);
+    ctx.stroke();
   }
   ctx.restore();
 }
@@ -440,8 +494,11 @@ function drawPlayer(ctx, player, avatar, time, mirrored) {
   ctx.beginPath();
   ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
   ctx.clip();
+  ctx.fillStyle = mirrored ? 'rgba(181, 219, 239, .3)' : 'rgba(250, 239, 205, .24)';
+  ctx.fill();
   if (avatar?.complete) {
-    ctx.drawImage(avatar, -player.radius, -player.radius, player.radius * 2, player.radius * 2);
+    const avatarSize = player.radius * 2.18;
+    ctx.drawImage(avatar, -avatarSize / 2, -avatarSize / 2, avatarSize, avatarSize);
   } else {
     ctx.fillStyle = '#ecd79c';
     ctx.fill();
@@ -450,12 +507,18 @@ function drawPlayer(ctx, player, avatar, time, mirrored) {
 
   ctx.save();
   ctx.translate(player.x, player.y);
+  ctx.rotate(player.spin || 0);
   ctx.strokeStyle = mirrored ? '#c8e5f2' : '#f4dfad';
   ctx.lineWidth = 2;
   ctx.shadowColor = mirrored ? '#a9d3ed' : '#f1d792';
   ctx.shadowBlur = 12;
   ctx.beginPath();
   ctx.arc(0, 0, player.radius + 1, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255, 255, 255, .72)';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.arc(-player.radius * 0.18, -player.radius * 0.18, player.radius * 0.62, Math.PI * 1.05, Math.PI * 1.55);
   ctx.stroke();
   ctx.restore();
 }
@@ -473,6 +536,7 @@ export default function GameCanvas({
   paused,
   resetToken,
   onCollect,
+  onPaint,
   onSwitch,
   onDeath,
   onLockedDoor,
@@ -481,8 +545,8 @@ export default function GameCanvas({
   const canvasRef = useRef(null);
   const stateRef = useRef(null);
   const artRef = useRef({});
-  const callbacksRef = useRef({ onCollect, onSwitch, onDeath, onLockedDoor, onComplete });
-  callbacksRef.current = { onCollect, onSwitch, onDeath, onLockedDoor, onComplete };
+  const callbacksRef = useRef({ onCollect, onPaint, onSwitch, onDeath, onLockedDoor, onComplete });
+  callbacksRef.current = { onCollect, onPaint, onSwitch, onDeath, onLockedDoor, onComplete };
 
   useEffect(() => {
     const garden = new Image();
@@ -490,7 +554,7 @@ export default function GameCanvas({
     garden.src = assetUrl('assets/art/dream-garden.jpg');
     const avatar = new Image();
     avatar.crossOrigin = 'anonymous';
-    avatar.src = assetUrl('assets/art/alice-avatar.png');
+    avatar.src = assetUrl('assets/art/alice-chibi-head.png');
     const teacup = new Image();
     teacup.crossOrigin = 'anonymous';
     teacup.src = assetUrl('assets/art/teacup-portal.png');
@@ -516,6 +580,7 @@ export default function GameCanvas({
     stateRef.current = {
       player: makeBall(level.start),
       collected: new Set(),
+      painted: new Set(),
       switches: new Set(),
       checkpoint: level.start,
       complete: false,
@@ -589,6 +654,20 @@ export default function GameCanvas({
           if (item.type === 'checkpoint') state.checkpoint = { x: item.x, y: item.y };
           spawnBurst(state, item.x, item.y, item.type === 'potion' ? '#a9dced' : '#f1d38e', 12);
           callbacksRef.current.onCollect(item);
+        }
+
+        if (state.collected.has('red-paint')) {
+          for (const rose of level.paintables || []) {
+            if (state.painted.has(rose.id) || !overlapsItem(state.player, rose)) continue;
+            state.painted.add(rose.id);
+            if (rose.checkpoint) state.checkpoint = { x: rose.x, y: rose.y };
+            state.shakeUntil = time + 90;
+            spawnBurst(state, rose.x, rose.y, '#d44b60', 16);
+            callbacksRef.current.onPaint({
+              ...rose,
+              paintedIds: [...state.painted],
+            });
+          }
         }
 
         const touchingSwitches = new Set(
@@ -691,6 +770,9 @@ export default function GameCanvas({
 
       if (state) {
         drawDoor(ctx, level.goal, requirementsMet(level.goal.requires, state), time);
+        (level.paintables || []).forEach((rose) => (
+          drawPaintable(ctx, rose, state.painted.has(rose.id), time)
+        ));
         (level.switches || []).forEach((item) => {
           const active = item.action === 'rotate'
             ? (state.rotations.get(item.target) || 0) > 0

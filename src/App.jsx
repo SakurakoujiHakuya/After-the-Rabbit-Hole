@@ -309,6 +309,7 @@ export default function App() {
   const [collected, setCollected] = useState([]);
   const [activated, setActivated] = useState([]);
   const [rotations, setRotations] = useState({});
+  const [painted, setPainted] = useState([]);
   const [runDeaths, setRunDeaths] = useState(0);
   const [lastResult, setLastResult] = useState(null);
   const inputRef = useRef({
@@ -366,6 +367,7 @@ export default function App() {
     setCollected([]);
     setActivated([]);
     setRotations({});
+    setPainted([]);
     setRunDeaths(0);
     setLastResult(null);
     setPaused(false);
@@ -466,6 +468,7 @@ export default function App() {
     setCollected([]);
     setActivated([]);
     setRotations({});
+    setPainted([]);
     setRunDeaths(0);
     setPaused(false);
     setResetToken((value) => value + 1);
@@ -484,10 +487,22 @@ export default function App() {
       cookie: '你变大了，连规则也开始后退。',
       fragment: `她想起了：“${item.word}”`,
       checkpoint: '红玫瑰记住了你的位置。',
+      paint: '爱丽丝提起了红色油漆桶。',
       curiosity: '你找到了一枚藏起来的兔子浮雕。',
     };
     setToast(messages[item.type] || '机关发出了一声轻响。');
     emitEvent('item_collected', { levelId: level.id, itemType: item.type });
+  };
+
+  const handlePaint = (rose) => {
+    setPainted(rose.paintedIds || []);
+    const total = level.paintables?.length || 0;
+    const count = rose.paintedIds?.length || 0;
+    setToast(rose.checkpoint
+      ? `第 ${count} 朵玫瑰红了，并记住了你的位置。`
+      : `白玫瑰变红了：${count}/${total}`);
+    if (navigator.vibrate) navigator.vibrate([20, 25, 20]);
+    emitEvent('rose_painted', { levelId: level.id, roseId: rose.id, count });
   };
 
   const handleSwitch = (trigger) => {
@@ -561,6 +576,7 @@ export default function App() {
     setCollected([]);
     setActivated([]);
     setRotations({});
+    setPainted([]);
     setRunDeaths(0);
     setLastResult(null);
     setResetToken((value) => value + 1);
@@ -635,6 +651,7 @@ export default function App() {
             paused={paused || interlude}
             resetToken={resetToken}
             onCollect={handleCollect}
+            onPaint={handlePaint}
             onSwitch={handleSwitch}
             onDeath={handleDeath}
             onLockedDoor={() => setToast(level.lockedHint || '门仍在等待缺少的证据。')}
@@ -670,6 +687,11 @@ export default function App() {
                   {rotations[id] === turn ? '✓' : '↻'} 房间
                 </span>
               ))}
+              {(level.goal.requires?.painted || []).length > 0 && (
+                <span className={painted.length >= level.goal.requires.painted.length ? 'done' : ''}>
+                  {painted.length}/{level.goal.requires.painted.length} 玫瑰
+                </span>
+              )}
               {level.items?.some((item) => item.type === 'curiosity') && (
                 <span className={
                   collected.some((item) => item.type === 'curiosity') ||

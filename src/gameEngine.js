@@ -32,6 +32,7 @@ export function makeBall(start) {
     radius: 13,
     baseRadius: 13,
     trail: [],
+    spin: 0,
   };
 }
 
@@ -51,6 +52,8 @@ export function updateBall(ball, gravity, walls, dt, options = {}) {
   }
 
   const steps = Math.max(1, Math.ceil(speed / 2.4));
+  const startX = ball.x;
+  const startY = ball.y;
   for (let i = 0; i < steps; i += 1) {
     const nextX = ball.x + (ball.vx * frame) / steps;
     const testX = { ...ball, x: nextX };
@@ -69,6 +72,11 @@ export function updateBall(ball, gravity, walls, dt, options = {}) {
     }
   }
 
+  const distance = Math.hypot(ball.x - startX, ball.y - startY);
+  const spinDirection = Math.abs(ball.vx) > Math.abs(ball.vy)
+    ? Math.sign(ball.vx)
+    : Math.sign(ball.vy);
+  ball.spin += (distance / Math.max(1, ball.radius)) * spinDirection;
   ball.trail.unshift({ x: ball.x, y: ball.y });
   if (ball.trail.length > 14) ball.trail.pop();
 }
@@ -79,6 +87,7 @@ export function resetBall(ball, point) {
   ball.vx = 0;
   ball.vy = 0;
   ball.trail = [];
+  ball.spin = 0;
 }
 
 export function getMoverRect(mover, time) {
@@ -133,10 +142,13 @@ export function requirementsMet(requirements, state) {
   const rotationReady = Object.entries(requirements.rotations || {}).every(
     ([id, turn]) => (state.rotations?.get(id) || 0) === turn,
   );
+  const paintedReady = (requirements.painted || []).every(
+    (id) => state.painted?.has(id),
+  );
   const fragmentReady =
     !requirements.fragments ||
     [...state.collected].filter((id) => id.startsWith('name-')).length >= requirements.fragments;
-  return itemReady && switchReady && rotationReady && fragmentReady;
+  return itemReady && switchReady && rotationReady && paintedReady && fragmentReady;
 }
 
 export function activateSwitch(sequence, switches, sequenceIndex, triggerId) {

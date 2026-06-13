@@ -101,3 +101,13 @@ test('checks the required dynamic room orientation', () => {
   assert.equal(requirementsMet({ rotations: { 'tea-table': 1 } }, state), true);
   assert.equal(requirementsMet({ rotations: { 'tea-table': 0 } }, state), false);
 });
+
+test('checks required painted roses', () => {
+  const state = {
+    collected: new Set(),
+    switches: new Set(),
+    painted: new Set(['rose-a', 'rose-b']),
+  };
+  assert.equal(requirementsMet({ painted: ['rose-a', 'rose-b'] }, state), true);
+  assert.equal(requirementsMet({ painted: ['rose-a', 'rose-c'] }, state), false);
+});

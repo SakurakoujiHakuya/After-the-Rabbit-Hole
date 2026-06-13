@@ -4,13 +4,24 @@
 
 每章遵循“引入规则、练习规则、组合规则、反转规则”的渐进结构。灵感来自任天堂常用的可读性与教学节奏，但地图、角色、机关和叙事均为原创。
 
+设计参考：
+
+- Nintendo《Super Mario Bros. Wonder》开发访谈：每个关卡至少提供一次惊喜，并优先让关卡本身发生变化，而不是只把玩家传送到别处。
+- SEGA《Super Monkey Ball》系列：倾斜、惯性、快速重试和逐步提高精度要求共同构成短关卡循环。
+
+参考链接：
+
+- https://www.nintendo.com/us/whatsnew/ask-the-developer-vol-11-super-mario-bros-wonder-part-1/
+- https://www.nintendo.com/us/whatsnew/ask-the-developer-vol-11-super-mario-bros-wonder-part-3/
+- https://www.sega.com/super-monkey-ball
+
 1. `兔子洞没有底`：学习惯性、刹车和虚拟摇杆。
 2. `门厅有许多门`：钥匙、尺寸与窄缝。
 3. `眼泪汇成了海`：水流和检查点。
 4. `你究竟是谁`：压力开关与故事分支。
 5. `蘑菇森林`：变大、变小与重量机关。
 6. `永远六点的茶会`：成对茶杯传送、轨道怀表与旋转茶桌。
-7. `女王的花园`：移动纸牌守卫和风险路线。
+7. `女王的花园`：先取得红漆，再按“安全展示、巡逻练习、窄路考验”依次染红三朵白玫瑰。
 8. `镜子说反话`：局部左右反转、茶杯传送与顺序印章。
 9. `名字的审判`：将前述机关与旋转法庭组合成最终考验。
 
@@ -28,3 +39,4 @@
 - 关键机关必须具备颜色之外的形状提示，确保小屏幕仍可辨认。
 - 顺序谜题使用 `switchSequence`，轨道障碍使用 `path: "orbit"`，两者都必须通过数据测试。
 - 动态房间使用 `rotators` 和 `requirements.rotations`，仅采用 90 度离散旋转以保证移动端碰撞稳定。
+- 玫瑰染色使用 `paintables` 和 `requirements.painted`，染色检查点由 `checkpoint: true` 声明。
