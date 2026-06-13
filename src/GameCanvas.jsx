@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { assetUrl } from './assets';
 import {
   WORLD,
   circleRectCollision,
@@ -13,13 +14,22 @@ function roundedRect(ctx, x, y, w, h, radius) {
   ctx.roundRect(x, y, w, h, radius);
 }
 
-function drawPaper(ctx, time) {
+function drawPaper(ctx, time, gardenImage) {
   const gradient = ctx.createRadialGradient(180, 290, 20, 180, 320, 430);
   gradient.addColorStop(0, '#23312d');
   gradient.addColorStop(0.58, '#17231f');
   gradient.addColorStop(1, '#0d1413');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, WORLD.width, WORLD.height);
+
+  if (gardenImage?.complete) {
+    ctx.save();
+    ctx.globalAlpha = 0.32;
+    ctx.drawImage(gardenImage, 0, 0, WORLD.width, WORLD.height);
+    ctx.restore();
+    ctx.fillStyle = 'rgba(8, 15, 13, .28)';
+    ctx.fillRect(0, 0, WORLD.width, WORLD.height);
+  }
 
   ctx.globalAlpha = 0.08;
   ctx.strokeStyle = '#d9cba7';
@@ -242,8 +252,16 @@ export default function GameCanvas({
 }) {
   const canvasRef = useRef(null);
   const stateRef = useRef(null);
+  const gardenRef = useRef(null);
   const callbacksRef = useRef({ onCollect, onLockedDoor, onComplete });
   callbacksRef.current = { onCollect, onLockedDoor, onComplete };
+
+  useEffect(() => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.src = assetUrl('assets/art/dream-garden.jpg');
+    gardenRef.current = image;
+  }, []);
 
   useEffect(() => {
     stateRef.current = {
@@ -316,7 +334,7 @@ export default function GameCanvas({
         }
       }
 
-      drawPaper(ctx, time);
+      drawPaper(ctx, time, gardenRef.current);
       (level.zones || []).forEach((zone) => drawZone(ctx, zone, time));
       level.walls.forEach((wall, index) => drawWall(ctx, wall, index));
 

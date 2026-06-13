@@ -58,10 +58,27 @@ button {
   justify-content: flex-end;
   flex-direction: column;
   text-align: center;
+  background: #0a0e0d;
+}
+
+.opening-illustration {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  filter: saturate(.86) contrast(1.05);
+}
+
+.start-screen::after {
+  position: absolute;
+  inset: 0;
   background:
-    linear-gradient(rgba(9, 15, 13, .12), rgba(9, 15, 13, .82)),
-    repeating-linear-gradient(91deg, transparent 0 17px, rgba(224, 211, 172, .025) 18px 19px),
-    radial-gradient(circle at 50% 12%, #35433c, #15201c 52%, #090e0d);
+    linear-gradient(to bottom, rgba(5, 8, 7, .05) 0%, rgba(5, 8, 7, .12) 32%, rgba(5, 8, 7, .62) 58%, rgba(5, 8, 7, .9) 100%),
+    radial-gradient(circle at 50% 72%, rgba(9, 14, 12, .5), transparent 56%);
+  content: "";
+  pointer-events: none;
 }
 
 .start-screen::before,
@@ -79,6 +96,9 @@ button {
   position: relative;
   z-index: 2;
   width: min(100%, 390px);
+  padding: 20px 14px 4px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(7, 11, 10, .72), transparent 70%);
 }
 
 .kicker {
@@ -181,59 +201,6 @@ button {
   letter-spacing: .12em;
 }
 
-.start-art {
-  position: absolute;
-  top: -13vh;
-  left: 50%;
-  width: min(110vw, 530px);
-  aspect-ratio: 1;
-  transform: translateX(-50%);
-}
-
-.rabbit-hole {
-  position: absolute;
-  inset: 20%;
-  display: grid;
-  place-items: center;
-  border: 18px solid #26342e;
-  border-radius: 45% 55% 51% 49% / 52% 43% 57% 48%;
-  background:
-    repeating-radial-gradient(ellipse at center, #0b100e 0 16px, #17211d 17px 19px, #0a0e0d 20px 34px);
-  box-shadow:
-    0 0 0 2px rgba(188, 172, 127, .16),
-    0 25px 60px rgba(0, 0, 0, .75),
-    inset 0 0 55px #000;
-  transform: rotate(-8deg);
-}
-
-.memory-pearl {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #f2df9e;
-  box-shadow: 0 0 18px 5px rgba(235, 207, 130, .48);
-  animation: falling 3.2s ease-in-out infinite;
-}
-
-.orbit {
-  position: absolute;
-  border: 1px solid rgba(201, 183, 135, .15);
-  border-radius: 50%;
-}
-
-.orbit-one { inset: 12%; transform: rotate(18deg); }
-.orbit-two { inset: 7% 18%; transform: rotate(-23deg); }
-
-.key-silhouette {
-  position: absolute;
-  top: 36%;
-  left: 17%;
-  color: rgba(204, 181, 119, .35);
-  font-family: serif;
-  font-size: 45px;
-  transform: rotate(-42deg);
-}
-
 .falling-motes i {
   position: absolute;
   z-index: 1;
@@ -277,7 +244,31 @@ button {
   text-align: center;
   background:
     radial-gradient(circle at 50% 36%, rgba(61, 84, 74, .75), transparent 28%),
+    var(--garden-art) center / cover,
     linear-gradient(#17231f, #0d1412);
+}
+
+.permission-screen::after {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 15, 13, .73);
+  content: "";
+  pointer-events: none;
+}
+
+.permission-screen > * {
+  z-index: 1;
+}
+
+.permission-rabbit {
+  position: absolute;
+  z-index: 1;
+  top: 7%;
+  right: -10%;
+  width: min(52vw, 250px);
+  filter: drop-shadow(0 12px 22px rgba(0, 0, 0, .55));
+  opacity: .76;
+  transform: rotate(-8deg);
 }
 
 .permission-screen h2,
@@ -460,7 +451,53 @@ button {
     max(15px, env(safe-area-inset-bottom));
   overflow: hidden;
   background:
+    linear-gradient(rgba(8, 14, 12, .65), rgba(8, 14, 12, .85)),
+    var(--garden-art) center / cover,
     radial-gradient(circle at 50% 42%, #27372f, #111a17 60%, #090e0d);
+}
+
+.music-button {
+  position: fixed;
+  z-index: 30;
+  top: max(16px, env(safe-area-inset-top));
+  right: 66px;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid rgba(204, 182, 126, .4);
+  border-radius: 50%;
+  background: rgba(12, 18, 16, .7);
+  color: #cfb773;
+  backdrop-filter: blur(7px);
+}
+
+.music-button span {
+  font-family: Georgia, serif;
+  font-size: 17px;
+}
+
+.music-button i {
+  position: absolute;
+  right: 6px;
+  bottom: 7px;
+  width: 7px;
+  height: 1px;
+  background: currentColor;
+  transform: rotate(-45deg);
+}
+
+.music-button.is-playing {
+  box-shadow: 0 0 18px rgba(219, 192, 119, .23);
+  animation: music-pulse 1.8s ease-in-out infinite;
+}
+
+.music-button.is-playing i {
+  display: none;
+}
+
+@keyframes music-pulse {
+  50% { transform: scale(1.08); }
 }
 
 .game-header {
@@ -796,10 +833,6 @@ button {
 }
 
 @media (min-width: 700px) {
-  .start-art {
-    top: -200px;
-  }
-
   .start-screen {
     justify-content: center;
   }

@@ -28,3 +28,12 @@ npm run build
 ## 部署
 
 推送到 `main` 分支后，GitHub Actions 会自动构建并部署到 GitHub Pages。
+
+## 素材
+
+- 兔子洞、白兔与梦境花园插画为项目原创生成素材。
+- BGM 使用作者提供的视频《BLACKSOULS 1 BGM 全收录》第 25 P《不思議の国》音轨。
+- 图片与音频通过外部静态资源服务器加载，不提交到代码仓库。
+- 默认资源地址：`https://hakuya.top/after-the-rabbit-hole`
+- 本地开发可在 `.env.local` 中配置 `VITE_ASSET_BASE_URL`。
+- GitHub Actions 使用仓库变量 `ASSET_BASE_URL`。

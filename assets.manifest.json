@@ -1,0 +1,25 @@
+{
+  "baseUrl": "https://hakuya.top/after-the-rabbit-hole",
+  "assets": [
+    {
+      "path": "assets/art/opening-rabbit-hole.jpg",
+      "sha256": "a5ee5f0db74233e5924ca9780ef2cece6666628fd04583e1752be7648376d47f",
+      "description": "Original opening illustration with the girl, white rabbit and rabbit hole"
+    },
+    {
+      "path": "assets/art/dream-garden.jpg",
+      "sha256": "a9286d857e68cf97a18ea9ebd0252f720caec82cfd228be08afcac8a825725fe",
+      "description": "Original dream garden and maze background"
+    },
+    {
+      "path": "assets/art/white-rabbit.png",
+      "sha256": "1b186875ac746171bc55d1e91647b7535734f541f9fe889ce93ae2983caa9541",
+      "description": "Original transparent white rabbit illustration"
+    },
+    {
+      "path": "assets/audio/rabbit-hole-bgm.mp3",
+      "sha256": "07fbc52b04d3ba65e6753763a9e19326c332522a7f1ac1135a6bf367bcf6348a",
+      "description": "BGM extracted from BV1ZK411B7cv, part 25, 不思議の国"
+    }
+  ]
+}

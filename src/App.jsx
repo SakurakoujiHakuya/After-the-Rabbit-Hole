@@ -1,22 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import GameCanvas from './GameCanvas';
+import { assetUrl } from './assets';
 import { levels } from './levels';
 
 function emitEvent(name, detail = {}) {
   window.dispatchEvent(new CustomEvent(`rabbit-hole:${name}`, { detail }));
 }
 
+function MusicButton({ muted, playing, onToggle }) {
+  const active = playing && !muted;
+  return (
+    <button
+      className={`music-button ${active ? 'is-playing' : ''}`}
+      onClick={onToggle}
+      aria-label={active ? '关闭背景音乐' : '播放背景音乐'}
+    >
+      <span>{active ? '♫' : '♪'}</span>
+      <i />
+    </button>
+  );
+}
+
 function StartScreen({ onStart, onHowTo }) {
   return (
     <main className="screen start-screen">
+      <img
+        className="opening-illustration"
+        src={assetUrl('assets/art/opening-rabbit-hole.jpg')}
+        alt=""
+      />
       <div className="falling-motes" aria-hidden="true">
         {Array.from({ length: 14 }, (_, index) => <i key={index} />)}
-      </div>
-      <div className="start-art" aria-hidden="true">
-        <span className="orbit orbit-one" />
-        <span className="orbit orbit-two" />
-        <span className="key-silhouette">⚿</span>
-        <div className="rabbit-hole"><div className="memory-pearl" /></div>
       </div>
       <section className="title-card">
         <p className="kicker">A LITTLE GRAVITY TALE</p>
@@ -33,7 +47,15 @@ function StartScreen({ onStart, onHowTo }) {
 
 function PermissionScreen({ onAllow, onFallback, requesting, error }) {
   return (
-    <main className="screen permission-screen">
+    <main
+      className="screen permission-screen"
+      style={{ '--garden-art': `url("${assetUrl('assets/art/dream-garden.jpg')}")` }}
+    >
+      <img
+        className="permission-rabbit"
+        src={assetUrl('assets/art/white-rabbit.png')}
+        alt="追逐怀表的白兔"
+      />
       <div className="permission-ornament">◜ <span>✦</span> ◝</div>
       <div className="tilt-device" aria-hidden="true">
         <div className="tiny-maze"><span /></div>
@@ -177,6 +199,8 @@ export default function App() {
   const [showHowTo, setShowHowTo] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [permissionError, setPermissionError] = useState('');
+  const [musicMuted, setMusicMuted] = useState(false);
+  const [musicPlaying, setMusicPlaying] = useState(false);
   const [controlMode, setControlMode] = useState('keyboard');
   const [levelIndex, setLevelIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -192,6 +216,42 @@ export default function App() {
   const gravityRef = useRef({ x: 0, y: 0 });
   const keysRef = useRef(new Set());
   const level = levels[levelIndex];
+  const audioRef = useRef(null);
+
+  const startMusic = useCallback(async () => {
+    const audio = audioRef.current;
+    if (!audio || musicMuted) return;
+    try {
+      await audio.play();
+      setMusicPlaying(true);
+    } catch {
+      setMusicPlaying(false);
+    }
+  }, [musicMuted]);
+
+  const toggleMusic = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (musicMuted || audio.paused) {
+      setMusicMuted(false);
+      audio.muted = false;
+      try {
+        await audio.play();
+        setMusicPlaying(true);
+      } catch {
+        setMusicPlaying(false);
+      }
+    } else {
+      setMusicMuted(true);
+      audio.muted = true;
+      setMusicPlaying(false);
+    }
+  };
+
+  const openPermission = async () => {
+    await startMusic();
+    setScreen('permission');
+  };
 
   const beginGame = useCallback((mode) => {
     setControlMode(mode);
@@ -332,7 +392,19 @@ export default function App() {
   if (screen === 'start') {
     return (
       <>
-        <StartScreen onStart={() => setScreen('permission')} onHowTo={() => setShowHowTo(true)} />
+        <audio
+          ref={audioRef}
+          src={assetUrl('assets/audio/rabbit-hole-bgm.mp3')}
+          loop
+          preload="auto"
+          volume="0.35"
+        />
+        <MusicButton
+          muted={musicMuted}
+          playing={musicPlaying}
+          onToggle={toggleMusic}
+        />
+        <StartScreen onStart={openPermission} onHowTo={() => setShowHowTo(true)} />
         {showHowTo && <HowTo onClose={() => setShowHowTo(false)} />}
       </>
     );
@@ -340,83 +412,130 @@ export default function App() {
 
   if (screen === 'permission') {
     return (
-      <PermissionScreen
-        onAllow={requestMotion}
-        onFallback={() => beginGame('joystick')}
-        requesting={requesting}
-        error={permissionError}
-      />
+      <>
+        <audio
+          ref={audioRef}
+          src={assetUrl('assets/audio/rabbit-hole-bgm.mp3')}
+          loop
+          preload="auto"
+          volume="0.35"
+        />
+        <MusicButton
+          muted={musicMuted}
+          playing={musicPlaying}
+          onToggle={toggleMusic}
+        />
+        <PermissionScreen
+          onAllow={requestMotion}
+          onFallback={() => beginGame('joystick')}
+          requesting={requesting}
+          error={permissionError}
+        />
+      </>
     );
   }
 
   if (screen === 'ending') {
-    return <Ending onReplay={() => setScreen('start')} />;
+    return (
+      <>
+        <audio
+          ref={audioRef}
+          src={assetUrl('assets/audio/rabbit-hole-bgm.mp3')}
+          loop
+          preload="auto"
+          volume="0.35"
+        />
+        <MusicButton
+          muted={musicMuted}
+          playing={musicPlaying}
+          onToggle={toggleMusic}
+        />
+        <Ending onReplay={() => setScreen('start')} />
+      </>
+    );
   }
 
   const fragmentItems = collected.filter((item) => item.type === 'fragment');
   return (
-    <main className="game-shell">
-      <header className="game-header">
-        <div>
-          <p>{level.eyebrow}</p>
-          <h1>{level.name}</h1>
-        </div>
-        <button className="pause-button" onClick={() => setPaused(true)} aria-label="暂停">
-          <i /><i />
-        </button>
-      </header>
-
-      <section className="canvas-frame">
-        <GameCanvas
-          level={level}
-          gravityRef={gravityRef}
-          paused={paused || interlude}
-          resetToken={resetToken}
-          onCollect={handleCollect}
-          onLockedDoor={() => setToast(level.lockedHint || '门仍在等你找回缺少的东西。')}
-          onComplete={handleComplete}
-        />
-        <div className="corner corner-tl" />
-        <div className="corner corner-tr" />
-        <div className="corner corner-bl" />
-        <div className="corner corner-br" />
-      </section>
-
-      <footer className="game-footer">
-        <div className="hint-line"><span>✦</span><p>{level.hint}</p><span>✦</span></div>
-        {level.fragments && (
-          <div className="fragment-status">
-            {level.fragments.map((word) => (
-              <span key={word} className={fragmentItems.some((item) => item.word === word) ? 'found' : ''}>
-                {fragmentItems.some((item) => item.word === word) ? word : '？'}
-              </span>
-            ))}
+    <>
+      <audio
+        ref={audioRef}
+        src={assetUrl('assets/audio/rabbit-hole-bgm.mp3')}
+        loop
+        preload="auto"
+        volume="0.35"
+      />
+      <MusicButton
+        muted={musicMuted}
+        playing={musicPlaying}
+        onToggle={toggleMusic}
+      />
+      <main
+        className="game-shell"
+        style={{ '--garden-art': `url("${assetUrl('assets/art/dream-garden.jpg')}")` }}
+      >
+        <header className="game-header">
+          <div>
+            <p>{level.eyebrow}</p>
+            <h1>{level.name}</h1>
           </div>
-        )}
-        <p className="control-label">
-          {controlMode === 'motion' ? '倾斜手机以移动' : controlMode === 'joystick' ? '拖动左下角圆盘' : '方向键 / WASD'}
-        </p>
-      </footer>
+          <button className="pause-button" onClick={() => setPaused(true)} aria-label="暂停">
+            <i /><i />
+          </button>
+        </header>
 
-      {controlMode === 'joystick' && <Joystick gravityRef={inputRef} />}
-      {toast && <div className="toast">{toast}</div>}
-      {paused && (
-        <PauseModal
-          onResume={() => setPaused(false)}
-          onRestart={restart}
-          onQuit={() => {
-            setPaused(false);
-            setScreen('start');
-          }}
-        />
-      )}
-      {interlude && (
-        <LevelInterlude
-          level={level}
-          onContinue={continueAfterLevel}
-          isLast={levelIndex === levels.length - 1}
-        />
-      )}
-    </main>
+        <section className="canvas-frame">
+          <GameCanvas
+            level={level}
+            gravityRef={gravityRef}
+            paused={paused || interlude}
+            resetToken={resetToken}
+            onCollect={handleCollect}
+            onLockedDoor={() => setToast(level.lockedHint || '门仍在等你找回缺少的东西。')}
+            onComplete={handleComplete}
+          />
+          <div className="corner corner-tl" />
+          <div className="corner corner-tr" />
+          <div className="corner corner-bl" />
+          <div className="corner corner-br" />
+        </section>
+
+        <footer className="game-footer">
+          <div className="hint-line"><span>✦</span><p>{level.hint}</p><span>✦</span></div>
+          {level.fragments && (
+            <div className="fragment-status">
+              {level.fragments.map((word) => (
+                <span key={word} className={fragmentItems.some((item) => item.word === word) ? 'found' : ''}>
+                  {fragmentItems.some((item) => item.word === word) ? word : '？'}
+                </span>
+              ))}
+            </div>
+          )}
+          <p className="control-label">
+            {controlMode === 'motion' ? '倾斜手机以移动' : controlMode === 'joystick' ? '拖动左下角圆盘' : '方向键 / WASD'}
+          </p>
+        </footer>
+
+        {controlMode === 'joystick' && <Joystick gravityRef={inputRef} />}
+        {toast && <div className="toast">{toast}</div>}
+        {paused && (
+          <PauseModal
+            onResume={() => setPaused(false)}
+            onRestart={restart}
+            onQuit={() => {
+              setPaused(false);
+              setScreen('start');
+            }}
+          />
+        )}
+        {interlude && (
+          <LevelInterlude
+            level={level}
+            onContinue={continueAfterLevel}
+            isLast={levelIndex === levels.length - 1}
+          />
+        )}
+      </main>
+    </>
   );
 }
