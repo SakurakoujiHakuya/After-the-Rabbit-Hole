@@ -3,9 +3,12 @@ import { assetUrl } from './assets';
 import {
   WORLD,
   circleRectCollision,
+  getMoverRect,
   makeBall,
   overlapsItem,
   pointInRect,
+  requirementsMet,
+  resetBall,
   updateBall,
 } from './gameEngine';
 
@@ -14,66 +17,75 @@ function roundedRect(ctx, x, y, w, h, radius) {
   ctx.roundRect(x, y, w, h, radius);
 }
 
-function drawPaper(ctx, time, gardenImage) {
+function drawPaper(ctx, gardenImage) {
   const gradient = ctx.createRadialGradient(180, 290, 20, 180, 320, 430);
-  gradient.addColorStop(0, '#23312d');
-  gradient.addColorStop(0.58, '#17231f');
-  gradient.addColorStop(1, '#0d1413');
+  gradient.addColorStop(0, '#586a82');
+  gradient.addColorStop(0.55, '#33455c');
+  gradient.addColorStop(1, '#182338');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, WORLD.width, WORLD.height);
 
   if (gardenImage?.complete) {
     ctx.save();
-    ctx.globalAlpha = 0.32;
+    ctx.globalAlpha = 0.36;
+    ctx.filter = 'hue-rotate(20deg) saturate(.82) brightness(1.28)';
     ctx.drawImage(gardenImage, 0, 0, WORLD.width, WORLD.height);
     ctx.restore();
-    ctx.fillStyle = 'rgba(8, 15, 13, .28)';
-    ctx.fillRect(0, 0, WORLD.width, WORLD.height);
   }
 
-  ctx.globalAlpha = 0.08;
-  ctx.strokeStyle = '#d9cba7';
-  ctx.lineWidth = 0.7;
-  for (let y = 12; y < WORLD.height; y += 19) {
-    ctx.beginPath();
-    for (let x = 0; x <= WORLD.width; x += 12) {
-      const wave = Math.sin(x * 0.06 + y + time * 0.00015) * 1.5;
-      if (x === 0) ctx.moveTo(x, y + wave);
-      else ctx.lineTo(x, y + wave);
-    }
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
+  const wash = ctx.createLinearGradient(0, 0, WORLD.width, WORLD.height);
+  wash.addColorStop(0, 'rgba(139, 151, 204, .16)');
+  wash.addColorStop(0.5, 'rgba(241, 220, 178, .03)');
+  wash.addColorStop(1, 'rgba(86, 48, 98, .2)');
+  ctx.fillStyle = wash;
+  ctx.fillRect(0, 0, WORLD.width, WORLD.height);
 
   const vignette = ctx.createRadialGradient(180, 320, 170, 180, 320, 390);
   vignette.addColorStop(0, 'transparent');
-  vignette.addColorStop(1, 'rgba(0,0,0,.56)');
+  vignette.addColorStop(1, 'rgba(4, 7, 14, .38)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, WORLD.width, WORLD.height);
 }
 
 function drawZone(ctx, zone, time) {
-  const pulse = Math.sin(time / 600) * 0.04;
-  const gradient = ctx.createLinearGradient(zone.x, zone.y, zone.x + zone.w, zone.y + zone.h);
-  gradient.addColorStop(0, `rgba(117, 166, 168, ${0.13 + pulse})`);
-  gradient.addColorStop(0.5, 'rgba(214, 226, 208, .08)');
-  gradient.addColorStop(1, `rgba(98, 141, 151, ${0.16 + pulse})`);
-  ctx.fillStyle = gradient;
-  ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
   ctx.save();
-  ctx.globalAlpha = 0.25;
-  ctx.strokeStyle = '#b7d6d2';
-  for (let y = zone.y + 16; y < zone.y + zone.h; y += 25) {
+  if (zone.type === 'mirror') {
+    const gradient = ctx.createLinearGradient(zone.x, zone.y, zone.x + zone.w, zone.y + zone.h);
+    gradient.addColorStop(0, 'rgba(160, 187, 222, .2)');
+    gradient.addColorStop(0.5, 'rgba(237, 226, 244, .1)');
+    gradient.addColorStop(1, 'rgba(126, 104, 170, .22)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
+    ctx.strokeStyle = 'rgba(211, 220, 246, .33)';
+    for (let y = zone.y + 14; y < zone.y + zone.h; y += 26) {
+      ctx.beginPath();
+      ctx.moveTo(zone.x, y);
+      ctx.bezierCurveTo(zone.x + zone.w * 0.3, y + Math.sin(time / 350 + y) * 5, zone.x + zone.w * 0.7, y - 4, zone.x + zone.w, y);
+      ctx.stroke();
+    }
+  } else if (zone.type === 'current') {
+    ctx.fillStyle = 'rgba(73, 139, 181, .17)';
+    ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
+    ctx.strokeStyle = 'rgba(151, 211, 232, .35)';
+    ctx.lineWidth = 1.5;
+    const direction = Math.sign(Math.abs(zone.forceX) > Math.abs(zone.forceY) ? zone.forceX : zone.forceY);
+    for (let i = 0; i < 5; i += 1) {
+      const y = zone.y + 12 + i * 14;
+      const shift = ((time * 0.04 * direction + i * 38) % zone.w + zone.w) % zone.w;
+      ctx.beginPath();
+      ctx.moveTo(zone.x + shift, y);
+      ctx.lineTo(zone.x + shift + 18 * direction, y);
+      ctx.stroke();
+    }
+  } else if (zone.type === 'ice') {
+    ctx.fillStyle = 'rgba(192, 218, 234, .16)';
+    ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
+    ctx.strokeStyle = 'rgba(224, 238, 245, .28)';
     ctx.beginPath();
-    ctx.moveTo(zone.x, y);
-    ctx.bezierCurveTo(
-      zone.x + zone.w * 0.3,
-      y + Math.sin(time / 400 + y) * 5,
-      zone.x + zone.w * 0.7,
-      y - 5,
-      zone.x + zone.w,
-      y,
-    );
+    ctx.moveTo(zone.x + 12, zone.y + zone.h - 8);
+    ctx.lineTo(zone.x + zone.w * 0.42, zone.y + 8);
+    ctx.lineTo(zone.x + zone.w * 0.64, zone.y + zone.h - 10);
+    ctx.lineTo(zone.x + zone.w - 12, zone.y + 12);
     ctx.stroke();
   }
   ctx.restore();
@@ -81,32 +93,25 @@ function drawZone(ctx, zone, time) {
 
 function drawWall(ctx, wall, index) {
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,.45)';
-  ctx.shadowBlur = 7;
+  ctx.shadowColor = 'rgba(3, 6, 15, .52)';
+  ctx.shadowBlur = 8;
   ctx.shadowOffsetY = 3;
   const gradient = ctx.createLinearGradient(wall.x, wall.y, wall.x, wall.y + wall.h);
-  gradient.addColorStop(0, '#405044');
-  gradient.addColorStop(0.45, '#222e28');
-  gradient.addColorStop(1, '#111916');
+  gradient.addColorStop(0, '#65728a');
+  gradient.addColorStop(0.25, '#3c485e');
+  gradient.addColorStop(1, '#192233');
   ctx.fillStyle = gradient;
   roundedRect(ctx, wall.x, wall.y, wall.w, wall.h, 5);
   ctx.fill();
   ctx.shadowColor = 'transparent';
-  ctx.strokeStyle = 'rgba(185, 171, 127, .28)';
+  ctx.strokeStyle = 'rgba(230, 216, 178, .34)';
   ctx.lineWidth = 1;
   ctx.stroke();
-
-  ctx.strokeStyle = 'rgba(11, 16, 14, .8)';
-  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = 'rgba(17, 24, 39, .75)';
   for (let x = wall.x + 8; x < wall.x + wall.w; x += 14) {
     ctx.beginPath();
     ctx.moveTo(x, wall.y + wall.h);
-    ctx.quadraticCurveTo(
-      x + (index % 2 ? -4 : 4),
-      wall.y + wall.h * 0.4,
-      x + 2,
-      wall.y,
-    );
+    ctx.quadraticCurveTo(x + (index % 2 ? -4 : 4), wall.y + wall.h * 0.4, x + 2, wall.y);
     ctx.stroke();
   }
   ctx.restore();
@@ -115,10 +120,10 @@ function drawWall(ctx, wall, index) {
 function drawDoor(ctx, goal, open, time) {
   ctx.save();
   ctx.translate(goal.x, goal.y);
-  ctx.shadowColor = open ? 'rgba(211, 178, 104, .62)' : 'rgba(0, 0, 0, .65)';
+  ctx.shadowColor = open ? 'rgba(246, 211, 130, .72)' : 'rgba(0, 0, 0, .65)';
   ctx.shadowBlur = open ? 18 + Math.sin(time / 180) * 4 : 8;
-  ctx.fillStyle = open ? '#80693c' : '#342e27';
-  ctx.strokeStyle = open ? '#e0c180' : '#78654a';
+  ctx.fillStyle = open ? '#a58955' : '#433b45';
+  ctx.strokeStyle = open ? '#f2d99a' : '#8c7890';
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(2, goal.h);
@@ -128,117 +133,230 @@ function drawDoor(ctx, goal, open, time) {
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = open ? '#17211d' : '#171816';
+  ctx.fillStyle = open ? '#202b3b' : '#191923';
   ctx.fillRect(9, 20, goal.w - 18, goal.h - 20);
-  ctx.fillStyle = '#d4b56e';
+  ctx.fillStyle = '#f1cf80';
   ctx.beginPath();
   ctx.arc(goal.w - 12, goal.h * 0.58, 2, 0, Math.PI * 2);
   ctx.fill();
-  if (!open) {
-    ctx.strokeStyle = '#b99a5f';
-    ctx.lineWidth = 2;
+  ctx.restore();
+}
+
+function drawItem(ctx, item, time) {
+  ctx.save();
+  ctx.translate(item.x, item.y + Math.sin(time / 420 + item.x) * 1.5);
+  ctx.shadowBlur = 14;
+  if (item.type === 'key') {
+    ctx.shadowColor = '#f0ca6f';
+    ctx.strokeStyle = '#f0ce7c';
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(goal.w / 2, goal.h * 0.55, 5, Math.PI, 0);
-    ctx.lineTo(goal.w / 2 + 5, goal.h * 0.72);
-    ctx.lineTo(goal.w / 2 - 5, goal.h * 0.72);
+    ctx.arc(-5, 0, 6, 0, Math.PI * 2);
+    ctx.moveTo(1, 0);
+    ctx.lineTo(13, 0);
+    ctx.lineTo(13, 5);
+    ctx.moveTo(8, 0);
+    ctx.lineTo(8, 4);
+    ctx.stroke();
+  } else if (item.type === 'potion' || item.type === 'cookie') {
+    ctx.shadowColor = item.type === 'potion' ? '#8ed3e4' : '#e8b87d';
+    ctx.fillStyle = item.type === 'potion' ? '#91cfe0' : '#d5a46b';
+    if (item.type === 'potion') {
+      ctx.beginPath();
+      ctx.moveTo(-5, -12);
+      ctx.lineTo(5, -12);
+      ctx.lineTo(5, -5);
+      ctx.quadraticCurveTo(13, 3, 7, 12);
+      ctx.quadraticCurveTo(0, 16, -7, 12);
+      ctx.quadraticCurveTo(-13, 3, -5, -5);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(0, 0, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#704d3b';
+      for (const [x, y] of [[-4, -3], [4, 3], [2, -6]]) {
+        ctx.beginPath();
+        ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  } else if (item.type === 'fragment') {
+    ctx.shadowColor = '#f3dfad';
+    ctx.fillStyle = '#ead9aa';
+    ctx.strokeStyle = '#7c6745';
+    ctx.beginPath();
+    ctx.moveTo(-13, -10);
+    ctx.lineTo(11, -12);
+    ctx.lineTo(13, 9);
+    ctx.lineTo(-10, 12);
     ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#342b2d';
+    ctx.font = '10px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(item.word, 0, 0);
+  } else if (item.type === 'checkpoint') {
+    ctx.shadowColor = '#e86872';
+    ctx.fillStyle = '#c94153';
+    ctx.beginPath();
+    ctx.arc(0, 0, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#f0adb1';
+    for (let i = 0; i < 5; i += 1) {
+      ctx.rotate((Math.PI * 2) / 5);
+      ctx.beginPath();
+      ctx.ellipse(0, -11, 5, 8, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function drawSwitch(ctx, item, active, time) {
+  ctx.save();
+  ctx.translate(item.x, item.y);
+  ctx.shadowColor = active ? '#f3cf80' : 'transparent';
+  ctx.shadowBlur = 15;
+  ctx.fillStyle = active ? '#c9a85d' : '#5e5570';
+  ctx.strokeStyle = active ? '#fae1a1' : '#a89cbf';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, item.r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = active ? '#fff2c6' : '#d1c6e0';
+  ctx.font = `${Math.max(12, item.r)}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(item.minRadius ? '⚖' : active ? '✓' : '?', 0, 1 + Math.sin(time / 300));
+  ctx.restore();
+}
+
+function drawGate(ctx, gate, open) {
+  if (open) return;
+  ctx.save();
+  ctx.fillStyle = 'rgba(119, 85, 130, .82)';
+  ctx.strokeStyle = '#dcc5df';
+  ctx.shadowColor = '#a675b0';
+  ctx.shadowBlur = 10;
+  ctx.fillRect(gate.x, gate.y, gate.w, gate.h);
+  ctx.strokeRect(gate.x, gate.y, gate.w, gate.h);
+  ctx.restore();
+}
+
+function drawPortal(ctx, portal, time, image) {
+  ctx.save();
+  ctx.translate(portal.x, portal.y);
+  if (image?.complete) {
+    const pulse = 1 + Math.sin(time / 330) * 0.035;
+    ctx.scale(pulse, pulse);
+    ctx.shadowColor = portal.color;
+    ctx.shadowBlur = 14;
+    ctx.drawImage(image, -portal.r * 1.6, -portal.r * 1.6, portal.r * 3.2, portal.r * 3.2);
+    ctx.restore();
+    return;
+  }
+  ctx.strokeStyle = portal.color;
+  ctx.lineWidth = 3;
+  ctx.shadowColor = portal.color;
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.ellipse(0, 2, portal.r, portal.r * 0.62, Math.sin(time / 800) * 0.15, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(portal.r * 0.65, -2, 5, -Math.PI / 2, Math.PI / 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawHazard(ctx, hazard, time) {
+  ctx.save();
+  ctx.translate(hazard.x, hazard.y);
+  ctx.rotate(time / 900);
+  ctx.strokeStyle = 'rgba(74, 40, 101, .8)';
+  ctx.shadowColor = '#5c3378';
+  ctx.shadowBlur = 14;
+  for (let i = 0; i < 4; i += 1) {
+    ctx.beginPath();
+    ctx.arc(0, 0, hazard.r - i * 4, i * 0.7, Math.PI * 1.6 + i * 0.7);
     ctx.stroke();
   }
   ctx.restore();
 }
 
-function drawKey(ctx, item, time) {
+function drawMover(ctx, mover, image) {
   ctx.save();
-  ctx.translate(item.x, item.y);
-  ctx.rotate(Math.sin(time / 450) * 0.18);
-  ctx.shadowColor = '#e1b85b';
-  ctx.shadowBlur = 14;
-  ctx.strokeStyle = '#e1c174';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(-5, 0, 6, 0, Math.PI * 2);
-  ctx.moveTo(1, 0);
-  ctx.lineTo(13, 0);
-  ctx.lineTo(13, 5);
-  ctx.moveTo(8, 0);
-  ctx.lineTo(8, 4);
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawPotion(ctx, item, time) {
-  ctx.save();
-  ctx.translate(item.x, item.y + Math.sin(time / 360) * 2);
-  ctx.shadowColor = '#87bec5';
-  ctx.shadowBlur = 13;
-  ctx.fillStyle = '#9ecbd0';
-  ctx.beginPath();
-  ctx.moveTo(-5, -12);
-  ctx.lineTo(5, -12);
-  ctx.lineTo(5, -5);
-  ctx.quadraticCurveTo(13, 3, 7, 12);
-  ctx.quadraticCurveTo(0, 16, -7, 12);
-  ctx.quadraticCurveTo(-13, 3, -5, -5);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#3b5554';
-  ctx.fillRect(-6, -15, 12, 4);
-  ctx.restore();
-}
-
-function drawFragment(ctx, item, time) {
-  ctx.save();
-  ctx.translate(item.x, item.y);
-  ctx.rotate(Math.sin(time / 700 + item.x) * 0.12);
-  ctx.shadowColor = '#e8d7a3';
-  ctx.shadowBlur = 12;
-  ctx.fillStyle = '#d9c89d';
-  ctx.strokeStyle = '#6f6045';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(-13, -10);
-  ctx.lineTo(11, -12);
-  ctx.lineTo(13, 9);
-  ctx.lineTo(-10, 12);
-  ctx.closePath();
+  ctx.translate(mover.x + mover.w / 2, mover.y + mover.h / 2);
+  if (image?.complete) {
+    const height = Math.max(42, mover.h * 2.7);
+    const width = height;
+    ctx.shadowColor = 'rgba(80, 26, 43, .58)';
+    ctx.shadowBlur = 9;
+    ctx.drawImage(image, -width / 2, -height * 0.62, width, height);
+    ctx.restore();
+    return;
+  }
+  ctx.fillStyle = '#efe2c2';
+  ctx.strokeStyle = '#8d3042';
+  ctx.lineWidth = 2;
+  roundedRect(ctx, -mover.w / 2, -mover.h / 2, mover.w, mover.h, 3);
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = '#2c2a22';
-  ctx.font = '10px serif';
+  ctx.fillStyle = '#9f3247';
+  ctx.font = '12px serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(item.word, 0, 0);
+  ctx.fillText('♥', 0, 1);
   ctx.restore();
 }
 
-function drawBall(ctx, ball, time, mirrored) {
-  ball.trail.forEach((point, index) => {
-    const alpha = (1 - index / ball.trail.length) * 0.16;
-    ctx.fillStyle = mirrored
-      ? `rgba(151, 205, 211, ${alpha})`
-      : `rgba(237, 216, 158, ${alpha})`;
+function drawPlayer(ctx, player, avatar, time, mirrored) {
+  player.trail.forEach((point, index) => {
+    const alpha = (1 - index / player.trail.length) * 0.14;
+    ctx.fillStyle = mirrored ? `rgba(167, 201, 232, ${alpha})` : `rgba(243, 219, 164, ${alpha})`;
     ctx.beginPath();
-    ctx.arc(point.x, point.y, Math.max(2, ball.radius - index * 0.45), 0, Math.PI * 2);
+    ctx.arc(point.x, point.y, Math.max(2, player.radius - index * 0.55), 0, Math.PI * 2);
     ctx.fill();
   });
 
   ctx.save();
-  ctx.translate(ball.x, ball.y);
-  ctx.shadowColor = mirrored ? '#a7d8d8' : '#e8d29a';
-  ctx.shadowBlur = 18 + Math.sin(time / 250) * 3;
-  const gradient = ctx.createRadialGradient(-4, -5, 1, 0, 0, ball.radius);
-  gradient.addColorStop(0, '#fff9dd');
-  gradient.addColorStop(0.28, mirrored ? '#b9e0df' : '#ead59e');
-  gradient.addColorStop(0.75, mirrored ? '#5e8e91' : '#9d7d48');
-  gradient.addColorStop(1, 'rgba(24, 27, 24, .45)');
-  ctx.fillStyle = gradient;
+  ctx.translate(player.x, player.y);
+  const lean = Math.max(-0.18, Math.min(0.18, player.vx * 0.035));
+  ctx.rotate(lean);
+  ctx.shadowColor = mirrored ? '#a9d3ed' : '#f1d792';
+  ctx.shadowBlur = 18 + Math.sin(time / 240) * 2;
   ctx.beginPath();
-  ctx.arc(0, 0, ball.radius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255, 250, 220, .55)';
-  ctx.lineWidth = 0.8;
+  ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+  ctx.clip();
+  if (avatar?.complete) {
+    ctx.drawImage(avatar, -player.radius, -player.radius, player.radius * 2, player.radius * 2);
+  } else {
+    ctx.fillStyle = '#ecd79c';
+    ctx.fill();
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(player.x, player.y);
+  ctx.strokeStyle = mirrored ? '#c8e5f2' : '#f4dfad';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = mirrored ? '#a9d3ed' : '#f1d792';
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.arc(0, 0, player.radius + 1, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
+}
+
+function getActiveGates(level, switches) {
+  return (level.gates || []).filter((gate) => {
+    const ids = gate.switchIds || [gate.switchId];
+    return !ids.every((id) => switches.has(id));
+  });
 }
 
 export default function GameCanvas({
@@ -247,28 +365,43 @@ export default function GameCanvas({
   paused,
   resetToken,
   onCollect,
+  onSwitch,
+  onDeath,
   onLockedDoor,
   onComplete,
 }) {
   const canvasRef = useRef(null);
   const stateRef = useRef(null);
-  const gardenRef = useRef(null);
-  const callbacksRef = useRef({ onCollect, onLockedDoor, onComplete });
-  callbacksRef.current = { onCollect, onLockedDoor, onComplete };
+  const artRef = useRef({});
+  const callbacksRef = useRef({ onCollect, onSwitch, onDeath, onLockedDoor, onComplete });
+  callbacksRef.current = { onCollect, onSwitch, onDeath, onLockedDoor, onComplete };
 
   useEffect(() => {
-    const image = new Image();
-    image.crossOrigin = 'anonymous';
-    image.src = assetUrl('assets/art/dream-garden.jpg');
-    gardenRef.current = image;
+    const garden = new Image();
+    garden.crossOrigin = 'anonymous';
+    garden.src = assetUrl('assets/art/dream-garden.jpg');
+    const avatar = new Image();
+    avatar.crossOrigin = 'anonymous';
+    avatar.src = assetUrl('assets/art/alice-avatar.png');
+    const teacup = new Image();
+    teacup.crossOrigin = 'anonymous';
+    teacup.src = assetUrl('assets/art/teacup-portal.png');
+    const cardGuard = new Image();
+    cardGuard.crossOrigin = 'anonymous';
+    cardGuard.src = assetUrl('assets/art/card-guard.png');
+    artRef.current = { garden, avatar, teacup, cardGuard };
   }, []);
 
   useEffect(() => {
     stateRef.current = {
-      ball: makeBall(level.start),
+      player: makeBall(level.start),
       collected: new Set(),
+      switches: new Set(),
+      checkpoint: level.start,
       complete: false,
       lockedCooldown: 0,
+      portalCooldown: 0,
+      deathCooldown: 0,
       startedAt: performance.now(),
     };
   }, [level, resetToken]);
@@ -288,79 +421,99 @@ export default function GameCanvas({
     resize();
     window.addEventListener('resize', resize);
 
+    const die = (state, reason, time) => {
+      if (time < state.deathCooldown) return;
+      state.deathCooldown = time + 700;
+      resetBall(state.player, state.checkpoint);
+      callbacksRef.current.onDeath(reason);
+    };
+
     const frame = (time) => {
       const state = stateRef.current;
       const dt = time - previous;
       previous = time;
+      const movers = (level.movers || []).map((mover) => getMoverRect(mover, time));
+      const activeGates = state ? getActiveGates(level, state.switches) : [];
 
       if (state && !paused && !state.complete) {
-        const mirrored = (level.zones || []).some(
-          (zone) => zone.type === 'mirror' && pointInRect(state.ball, zone),
-        );
-        const gravity = gravityRef.current || { x: 0, y: 0 };
-        updateBall(
-          state.ball,
-          { x: mirrored ? -gravity.x : gravity.x, y: gravity.y },
-          level.walls,
-          dt,
-        );
+        const mirrorZone = (level.zones || []).find((zone) => zone.type === 'mirror' && pointInRect(state.player, zone));
+        const currentZones = (level.zones || []).filter((zone) => zone.type === 'current' && pointInRect(state.player, zone));
+        const onIce = (level.zones || []).some((zone) => zone.type === 'ice' && pointInRect(state.player, zone));
+        const input = gravityRef.current || { x: 0, y: 0 };
+        const gravity = {
+          x: (mirrorZone ? -input.x : input.x) + currentZones.reduce((sum, zone) => sum + (zone.forceX || 0), 0),
+          y: input.y + currentZones.reduce((sum, zone) => sum + (zone.forceY || 0), 0),
+        };
+        updateBall(state.player, gravity, [...level.walls, ...activeGates], dt, {
+          friction: onIce ? 0.996 : 0.982,
+          maxSpeed: onIce ? 5.8 : 4.8,
+        });
 
         for (const item of level.items || []) {
-          if (!state.collected.has(item.id) && overlapsItem(state.ball, item)) {
-            state.collected.add(item.id);
-            if (item.type === 'potion') state.ball.radius = 6;
-            callbacksRef.current.onCollect(item);
+          if (state.collected.has(item.id) || !overlapsItem(state.player, item)) continue;
+          state.collected.add(item.id);
+          if (item.type === 'potion') state.player.radius = 7;
+          if (item.type === 'cookie') state.player.radius = 17;
+          if (item.type === 'checkpoint') state.checkpoint = { x: item.x, y: item.y };
+          callbacksRef.current.onCollect(item);
+        }
+
+        for (const trigger of level.switches || []) {
+          if (state.switches.has(trigger.id) || !overlapsItem(state.player, trigger)) continue;
+          if (trigger.minRadius && state.player.radius < trigger.minRadius) continue;
+          state.switches.add(trigger.id);
+          callbacksRef.current.onSwitch(trigger);
+        }
+
+        if (time > state.portalCooldown) {
+          const portal = (level.portals || []).find((entry) => overlapsItem(state.player, entry));
+          if (portal) {
+            const target = level.portals.find((entry) => entry.id === portal.pairId);
+            if (target) {
+              resetBall(state.player, target);
+              state.portalCooldown = time + 650;
+            }
           }
         }
 
-        const collectedFragments = [...state.collected].filter((id) =>
-          id.startsWith('fragment-'),
-        ).length;
-        const hasRequirement =
-          !level.goal.requires ||
-          (level.goal.requires === 'key' && state.collected.has('key')) ||
-          (level.goal.requires === 'fragments' && collectedFragments === 3);
+        const hazard = (level.hazards || []).find((entry) => overlapsItem(state.player, entry));
+        const moverHit = movers.find((entry) => circleRectCollision(state.player, entry));
+        if (hazard || moverHit) die(state, hazard ? 'hazard' : 'card', time);
 
-        if (circleRectCollision(state.ball, level.goal)) {
-          if (hasRequirement) {
+        if (circleRectCollision(state.player, level.goal)) {
+          if (requirementsMet(level.goal.requires, state)) {
             state.complete = true;
             callbacksRef.current.onComplete(time - state.startedAt);
           } else if (time > state.lockedCooldown) {
             state.lockedCooldown = time + 1200;
-            state.ball.vx *= -0.55;
-            state.ball.vy *= -0.55;
+            state.player.vx *= -0.55;
+            state.player.vy *= -0.55;
             callbacksRef.current.onLockedDoor();
           }
         }
       }
 
-      drawPaper(ctx, time, gardenRef.current);
+      drawPaper(ctx, artRef.current.garden);
       (level.zones || []).forEach((zone) => drawZone(ctx, zone, time));
       level.walls.forEach((wall, index) => drawWall(ctx, wall, index));
+      activeGates.forEach((gate) => drawGate(ctx, gate, false));
+      movers.forEach((mover) => drawMover(ctx, mover, artRef.current.cardGuard));
+      (level.hazards || []).forEach((hazard) => drawHazard(ctx, hazard, time));
+      (level.portals || []).forEach((portal) => drawPortal(ctx, portal, time, artRef.current.teacup));
 
       if (state) {
-        const fragmentCount = [...state.collected].filter((id) =>
-          id.startsWith('fragment-'),
-        ).length;
-        const open =
-          !level.goal.requires ||
-          state.collected.has('key') ||
-          (level.goal.requires === 'fragments' && fragmentCount === 3);
-        drawDoor(ctx, level.goal, open, time);
+        drawDoor(ctx, level.goal, requirementsMet(level.goal.requires, state), time);
+        (level.switches || []).forEach((item) => drawSwitch(ctx, item, state.switches.has(item.id), time));
         for (const item of level.items || []) {
-          if (state.collected.has(item.id)) continue;
-          if (item.type === 'key') drawKey(ctx, item, time);
-          if (item.type === 'potion') drawPotion(ctx, item, time);
-          if (item.type === 'fragment') drawFragment(ctx, item, time);
+          if (!state.collected.has(item.id)) drawItem(ctx, item, time);
         }
-        const mirrored = (level.zones || []).some(
-          (zone) => zone.type === 'mirror' && pointInRect(state.ball, zone),
-        );
-        drawBall(ctx, state.ball, time, mirrored);
+        const mirrored = (level.zones || []).some((zone) => zone.type === 'mirror' && pointInRect(state.player, zone));
+        drawPlayer(ctx, state.player, artRef.current.avatar, time, mirrored);
       }
 
       animationFrame = requestAnimationFrame(frame);
     };
+
     animationFrame = requestAnimationFrame(frame);
     return () => {
       cancelAnimationFrame(animationFrame);

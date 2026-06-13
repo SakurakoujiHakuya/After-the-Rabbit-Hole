@@ -29,16 +29,17 @@ export function makeBall(start) {
     y: start.y,
     vx: 0,
     vy: 0,
-    radius: 11,
+    radius: 13,
+    baseRadius: 13,
     trail: [],
   };
 }
 
-export function updateBall(ball, gravity, walls, dt) {
+export function updateBall(ball, gravity, walls, dt, options = {}) {
   const frame = Math.min(dt, 32) / 16.667;
-  const accel = 0.17;
-  const friction = 0.985 ** frame;
-  const maxSpeed = 4.6;
+  const accel = options.accel ?? 0.17;
+  const friction = (options.friction ?? 0.985) ** frame;
+  const maxSpeed = options.maxSpeed ?? 4.8;
 
   ball.vx = (ball.vx + gravity.x * accel * frame) * friction;
   ball.vy = (ball.vy + gravity.y * accel * frame) * friction;
@@ -70,4 +71,31 @@ export function updateBall(ball, gravity, walls, dt) {
 
   ball.trail.unshift({ x: ball.x, y: ball.y });
   if (ball.trail.length > 14) ball.trail.pop();
+}
+
+export function resetBall(ball, point) {
+  ball.x = point.x;
+  ball.y = point.y;
+  ball.vx = 0;
+  ball.vy = 0;
+  ball.trail = [];
+}
+
+export function getMoverRect(mover, time) {
+  const offset = Math.sin(time * mover.speed + (mover.phase || 0)) * mover.range;
+  return {
+    ...mover,
+    x: mover.x + (mover.axis === 'x' ? offset : 0),
+    y: mover.y + (mover.axis === 'y' ? offset : 0),
+  };
+}
+
+export function requirementsMet(requirements, state) {
+  if (!requirements) return true;
+  const itemReady = (requirements.items || []).every((id) => state.collected.has(id));
+  const switchReady = (requirements.switches || []).every((id) => state.switches.has(id));
+  const fragmentReady =
+    !requirements.fragments ||
+    [...state.collected].filter((id) => id.startsWith('name-')).length >= requirements.fragments;
+  return itemReady && switchReady && fragmentReady;
 }

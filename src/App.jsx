@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import GameCanvas from './GameCanvas';
 import { assetUrl } from './assets';
-import { levels } from './levels';
+import { firstLevelId, getLevel, levels } from './levels';
+import {
+  chooseBranch,
+  clearProgress,
+  completeLevel,
+  enterLevel,
+  loadProgress,
+  recordDeath,
+} from './progress';
 
 function emitEvent(name, detail = {}) {
   window.dispatchEvent(new CustomEvent(`rabbit-hole:${name}`, { detail }));
@@ -21,14 +29,12 @@ function MusicButton({ muted, playing, onToggle }) {
   );
 }
 
-function StartScreen({ onStart, onHowTo }) {
+function StartScreen({ progress, onContinue, onNewGame, onChapters, onHowTo }) {
+  const hasProgress = progress.unlocked.length > 1 || Object.keys(progress.completed).length > 0;
+  const currentLevel = getLevel(progress.currentLevelId);
   return (
     <main className="screen start-screen">
-      <img
-        className="opening-illustration"
-        src={assetUrl('assets/art/opening-rabbit-hole.jpg')}
-        alt=""
-      />
+      <img className="opening-illustration" src={assetUrl('assets/art/opening-rabbit-hole.jpg')} alt="" />
       <div className="falling-motes" aria-hidden="true">
         {Array.from({ length: 14 }, (_, index) => <i key={index} />)}
       </div>
@@ -36,11 +42,21 @@ function StartScreen({ onStart, onHowTo }) {
         <p className="kicker">A LITTLE GRAVITY TALE</p>
         <h1>兔子洞<br />尽头</h1>
         <div className="title-divider"><span>◆</span></div>
-        <p className="intro">请握住手机。<br />这个世界会往你倾斜的方向坠落。</p>
-        <button className="primary-button" onClick={onStart}>开始坠落</button>
+        <p className="intro">
+          {hasProgress ? (
+            <>书签停在「{currentLevel.name}」。<br />梦还记得你离开的地方。</>
+          ) : (
+            <>请握住手机。<br />这个世界会往你倾斜的方向坠落。</>
+          )}
+        </p>
+        <button className="primary-button" onClick={onContinue}>
+          {hasProgress ? '继续梦境' : '开始坠落'}
+        </button>
+        {hasProgress && <button className="secondary-start-button" onClick={onChapters}>打开章节书签</button>}
         <button className="text-button" onClick={onHowTo}>玩法说明</button>
+        {hasProgress && <button className="quiet-button" onClick={onNewGame}>从头开始</button>}
       </section>
-      <p className="edition">一则关于名字、门与错误方向的故事</p>
+      <p className="edition">一则关于名字、选择与错误方向的故事</p>
     </main>
   );
 }
@@ -51,15 +67,9 @@ function PermissionScreen({ onAllow, onFallback, requesting, error }) {
       className="screen permission-screen"
       style={{ '--garden-art': `url("${assetUrl('assets/art/dream-garden.jpg')}")` }}
     >
-      <img
-        className="permission-rabbit"
-        src={assetUrl('assets/art/white-rabbit.png')}
-        alt="追逐怀表的白兔"
-      />
+      <img className="permission-rabbit" src={assetUrl('assets/art/white-rabbit.png')} alt="追逐怀表的白兔" />
       <div className="permission-ornament">◜ <span>✦</span> ◝</div>
-      <div className="tilt-device" aria-hidden="true">
-        <div className="tiny-maze"><span /></div>
-      </div>
+      <div className="tilt-device" aria-hidden="true"><div className="tiny-maze"><span /></div></div>
       <p className="kicker">BEFORE THE FALL</p>
       <h2>让世界<br />开始倾斜</h2>
       <p className="body-copy">这个游戏需要读取手机的倾斜方向。<br />我们只感知方向，不会收集任何数据。</p>
@@ -79,14 +89,60 @@ function HowTo({ onClose }) {
       <section className="paper-modal" onClick={(event) => event.stopPropagation()}>
         <button className="modal-close" onClick={onClose} aria-label="关闭">×</button>
         <p className="kicker">HOW TO FALL</p>
-        <h2>倾斜一个<br />不讲道理的世界</h2>
-        <div className="instruction-row"><span>↔</span><p>左右倾斜，控制记忆珠滚动</p></div>
-        <div className="instruction-row"><span>↕</span><p>前后倾斜，寻找迷宫的门</p></div>
-        <div className="instruction-row"><span>◇</span><p>拾取钥匙、药水与名字碎片</p></div>
-        <p className="small-copy">传感器不可用时，屏幕左下角会出现触摸摇杆。</p>
+        <h2>每一章只教你<br />一条新规则</h2>
+        <div className="instruction-row"><span>↔</span><p>倾斜手机，让爱丽丝头像在玻璃球中滚动</p></div>
+        <div className="instruction-row"><span>♙</span><p>观察机关：水流、镜面、印章、茶杯与纸牌</p></div>
+        <div className="instruction-row"><span>◇</span><p>章节中会出现分支，选择将被自动保存</p></div>
+        <p className="small-copy">进度保存在当前浏览器中。传感器不可用时可使用触摸摇杆。</p>
         <button className="primary-button" onClick={onClose}>我记住了</button>
       </section>
     </div>
+  );
+}
+
+function ChapterScreen({ progress, onSelect, onBack }) {
+  const completedCount = Object.keys(progress.completed).length;
+  const chapterTotal = levels.length;
+  const storyComplete = Boolean(progress.completed['trial-of-names']);
+  return (
+    <main
+      className="screen chapter-screen"
+      style={{ '--garden-art': `url("${assetUrl('assets/art/dream-garden.jpg')}")` }}
+    >
+      <header className="chapter-header">
+        <button className="back-button" onClick={onBack}>←</button>
+        <div>
+          <p className="kicker">CHAPTER BOOKMARKS</p>
+          <h1>梦境书签</h1>
+        </div>
+        <span>{completedCount}/{chapterTotal}</span>
+      </header>
+      <div className="progress-track"><i style={{ width: `${Math.min(100, (completedCount / chapterTotal) * 100)}%` }} /></div>
+      <section className="chapter-list">
+        {levels.map((level) => {
+          const unlocked = progress.unlocked.includes(level.id) || (storyComplete && Boolean(level.branch));
+          const completed = Boolean(progress.completed[level.id]);
+          const chosen = Object.values(progress.choices).includes(level.branch);
+          const inaccessibleBranch = level.branch && !unlocked && Object.keys(progress.choices).length > 0 && !chosen;
+          return (
+            <button
+              key={level.id}
+              className={`chapter-card ${completed ? 'completed' : ''} ${unlocked ? '' : 'locked'}`}
+              disabled={!unlocked}
+              onClick={() => onSelect(level.id)}
+            >
+              <span className="chapter-number">{String(level.order).padStart(2, '0')}</span>
+              <div>
+                <small>{level.chapter}{level.branch ? ` · ${level.branch === 'tea' ? '茶会支线' : '蘑菇支线'}` : ''}</small>
+                <strong>{level.name}</strong>
+                <em>{unlocked ? level.mechanic : inaccessibleBranch ? '另一条梦境支线' : '尚未解锁'}</em>
+              </div>
+              <b>{completed ? '✓' : unlocked ? '→' : '×'}</b>
+            </button>
+          );
+        })}
+      </section>
+    </main>
   );
 }
 
@@ -121,9 +177,7 @@ function Joystick({ gravityRef }) {
         update(event.clientX, event.clientY);
       }}
       onPointerMove={(event) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-          update(event.clientX, event.clientY);
-        }
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) update(event.clientX, event.clientY);
       }}
       onPointerUp={release}
       onPointerCancel={release}
@@ -133,7 +187,7 @@ function Joystick({ gravityRef }) {
   );
 }
 
-function PauseModal({ onResume, onRestart, onQuit }) {
+function PauseModal({ onResume, onRestart, onChapters, onQuit }) {
   return (
     <div className="modal-backdrop">
       <section className="paper-modal compact">
@@ -141,55 +195,58 @@ function PauseModal({ onResume, onRestart, onQuit }) {
         <h2>世界暂时<br />停止倾斜</h2>
         <button className="primary-button" onClick={onResume}>继续寻找</button>
         <button className="secondary-button" onClick={onRestart}>重新开始本关</button>
+        <button className="secondary-button" onClick={onChapters}>章节书签</button>
         <button className="text-button" onClick={onQuit}>回到兔子洞口</button>
       </section>
     </div>
   );
 }
 
-function LevelInterlude({ level, onContinue, isLast }) {
+function LevelInterlude({ level, onContinue }) {
   return (
     <div className="modal-backdrop interlude">
       <section className="quote-card">
         <span className="quote-mark">“</span>
         <p>{level.quote}</p>
         <div className="title-divider"><span>◆</span></div>
-        <button className="text-button light" onClick={onContinue}>
-          {isLast ? '说出她的名字' : '继续坠落 ↓'}
-        </button>
+        {level.choices ? (
+          <div className="choice-list">
+            {level.choices.map((choice) => (
+              <button key={choice.id} onClick={() => onContinue(choice)}>
+                <strong>{choice.title}</strong>
+                <span>{choice.description}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <button className="text-button light" onClick={() => onContinue(null)}>
+            {level.ending ? '说出她的名字' : '翻到下一章 ↓'}
+          </button>
+        )}
       </section>
     </div>
   );
 }
 
-function Ending({ onReplay }) {
-  const share = async () => {
-    const data = {
-      title: '兔子洞尽头',
-      text: '我穿过了不讲道理的花园，也找回了遗失的名字。',
-      url: window.location.href,
-    };
-    if (navigator.share) await navigator.share(data).catch(() => {});
-    else await navigator.clipboard?.writeText(window.location.href);
-  };
-
+function Ending({ progress, onChapters, onReplay }) {
+  const branch = progress.choices['caterpillar-crossroad'];
   return (
     <main className="screen ending-screen">
       <div className="dawn" />
-      <div className="ending-star">✦</div>
+      <img className="ending-avatar" src={assetUrl('assets/art/alice-avatar.png')} alt="" />
       <p className="kicker">THE NAME REMEMBERED</p>
       <h2>她终于想起了<br />自己的名字</h2>
       <div className="title-divider dark"><span>◆</span></div>
       <blockquote>
-        出口并不在门后。<br />
-        出口在她重新说出<br />
-        自己名字的那一刻。
+        {branch === 'tea' ? '她带着茶会停住的时间，' : '她带着蘑菇改变的身体，'}<br />
+        亲口说出了那个<br />
+        世界无法替她定义的名字。
       </blockquote>
       <div className="ending-actions">
-        <button className="primary-button dark-button" onClick={onReplay}>再坠落一次</button>
-        <button className="text-button dark-text" onClick={share}>分享这段梦</button>
+        <button className="primary-button dark-button" onClick={onChapters}>重访其他章节</button>
+        <button className="text-button dark-text" onClick={onReplay}>从头再做一次选择</button>
       </div>
-      <p className="the-end">FIN · 兔子洞尽头</p>
+      <p className="the-end">FIN · 但梦境还有另一条路</p>
     </main>
   );
 }
@@ -202,7 +259,9 @@ export default function App() {
   const [musicMuted, setMusicMuted] = useState(false);
   const [musicPlaying, setMusicPlaying] = useState(false);
   const [controlMode, setControlMode] = useState('keyboard');
-  const [levelIndex, setLevelIndex] = useState(0);
+  const [progress, setProgress] = useState(loadProgress);
+  const [levelId, setLevelId] = useState(() => loadProgress().currentLevelId);
+  const [pendingLevelId, setPendingLevelId] = useState(() => loadProgress().currentLevelId);
   const [paused, setPaused] = useState(false);
   const [resetToken, setResetToken] = useState(0);
   const [interlude, setInterlude] = useState(false);
@@ -215,8 +274,8 @@ export default function App() {
   });
   const gravityRef = useRef({ x: 0, y: 0 });
   const keysRef = useRef(new Set());
-  const level = levels[levelIndex];
   const audioRef = useRef(null);
+  const level = getLevel(levelId);
 
   const startMusic = useCallback(async () => {
     const audio = audioRef.current;
@@ -248,26 +307,30 @@ export default function App() {
     }
   };
 
-  const openPermission = async () => {
+  const openPermission = async (targetLevelId = progress.currentLevelId) => {
     await startMusic();
+    setPendingLevelId(targetLevelId);
+    setPermissionError('');
     setScreen('permission');
   };
 
-  const beginGame = useCallback((mode) => {
+  const beginGame = useCallback((mode, targetLevelId = pendingLevelId) => {
+    const nextProgress = enterLevel(progress, targetLevelId);
+    setProgress(nextProgress);
     setControlMode(mode);
-    setLevelIndex(0);
+    setLevelId(targetLevelId);
     setCollected([]);
+    setPaused(false);
+    setResetToken((value) => value + 1);
     setScreen('game');
-    emitEvent('game_start', { controlMode: mode });
-  }, []);
+    emitEvent('game_start', { controlMode: mode, levelId: targetLevelId });
+  }, [pendingLevelId, progress]);
 
   const requestMotion = async () => {
     setRequesting(true);
     setPermissionError('');
     try {
-      if (!window.isSecureContext) {
-        throw new Error('insecure-context');
-      }
+      if (!window.isSecureContext) throw new Error('insecure-context');
       if (
         typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission === 'function'
@@ -276,17 +339,16 @@ export default function App() {
         if (result !== 'granted') throw new Error('denied');
       }
       if (typeof DeviceOrientationEvent === 'undefined') throw new Error('unsupported');
-      setControlMode('motion');
       beginGame('motion');
       emitEvent('permission_granted');
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'denied';
       if (reason === 'insecure-context') {
-        setPermissionError('当前页面使用 HTTP。iPhone 只允许 HTTPS 页面读取倾斜方向，请改用 HTTPS 地址，或暂时使用触摸控制。');
+        setPermissionError('当前页面使用 HTTP。iPhone 只允许 HTTPS 页面读取倾斜方向。');
       } else if (reason === 'unsupported') {
         setPermissionError('当前浏览器不支持方向传感器，请使用触摸控制。');
       } else {
-        setPermissionError('Safari 没有授予倾斜权限。请检查该网站的权限设置，或使用触摸控制。');
+        setPermissionError('Safari 没有授予倾斜权限，请检查该网站的权限设置。');
       }
       emitEvent('permission_denied', { reason });
     } finally {
@@ -337,9 +399,9 @@ export default function App() {
           : controlMode === 'joystick'
             ? inputRef.current.joystick
             : inputRef.current.keyboard;
-      const keyboard = inputRef.current.keyboard;
-      gravityRef.current.x = source.x + keyboard.x;
-      gravityRef.current.y = source.y + keyboard.y;
+      const keyboardAssist = controlMode === 'keyboard' ? { x: 0, y: 0 } : inputRef.current.keyboard;
+      gravityRef.current.x = source.x + keyboardAssist.x;
+      gravityRef.current.y = source.y + keyboardAssist.y;
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -365,111 +427,104 @@ export default function App() {
     const messages = {
       key: '钥匙在你手里轻轻响了一声。',
       potion: '你变小了。世界没有。',
+      cookie: '你变大了，连规则也开始后退。',
       fragment: `她想起了：“${item.word}”`,
+      checkpoint: '红玫瑰记住了你的位置。',
     };
-    setToast(messages[item.type]);
+    setToast(messages[item.type] || '机关发出了一声轻响。');
     emitEvent('item_collected', { levelId: level.id, itemType: item.type });
+  };
+
+  const handleSwitch = () => {
+    setToast('一枚印章亮了起来。');
+    if (navigator.vibrate) navigator.vibrate(25);
+  };
+
+  const handleDeath = (reason) => {
+    const nextProgress = recordDeath(progress, level.id);
+    setProgress(nextProgress);
+    setToast(reason === 'card' ? '纸牌卫兵把你送回了玫瑰旁。' : '漩涡把方向揉成了一团。');
+    if (navigator.vibrate) navigator.vibrate(90);
   };
 
   const handleComplete = (duration) => {
     if (navigator.vibrate) navigator.vibrate([50, 40, 50]);
+    const nextProgress = completeLevel(progress, level, Math.round(duration));
+    setProgress(nextProgress);
     setInterlude(true);
     emitEvent('level_complete', { levelId: level.id, duration: Math.round(duration) });
   };
 
-  const continueAfterLevel = () => {
+  const continueAfterLevel = (choice) => {
     setInterlude(false);
-    if (levelIndex === levels.length - 1) {
+    if (level.ending) {
       setScreen('ending');
       emitEvent('game_complete');
       return;
     }
-    setLevelIndex((value) => value + 1);
+    let nextProgress = progress;
+    let nextLevelId = level.next?.[0];
+    if (choice) {
+      nextProgress = chooseBranch(progress, level, choice);
+      nextLevelId = choice.next;
+    } else if (nextLevelId) {
+      nextProgress = enterLevel(progress, nextLevelId);
+    }
+    setProgress(nextProgress);
+    setLevelId(nextLevelId);
     setCollected([]);
     setResetToken((value) => value + 1);
   };
 
+  const startOver = () => {
+    const fresh = clearProgress();
+    setProgress(fresh);
+    setLevelId(firstLevelId);
+    openPermission(firstLevelId);
+  };
+
+  let content;
   if (screen === 'start') {
-    return (
+    content = (
       <>
-        <audio
-          ref={audioRef}
-          src={assetUrl('assets/audio/rabbit-hole-bgm.mp3')}
-          loop
-          preload="auto"
-          volume="0.35"
+        <StartScreen
+          progress={progress}
+          onContinue={() => openPermission(progress.currentLevelId)}
+          onNewGame={startOver}
+          onChapters={() => setScreen('chapters')}
+          onHowTo={() => setShowHowTo(true)}
         />
-        <MusicButton
-          muted={musicMuted}
-          playing={musicPlaying}
-          onToggle={toggleMusic}
-        />
-        <StartScreen onStart={openPermission} onHowTo={() => setShowHowTo(true)} />
         {showHowTo && <HowTo onClose={() => setShowHowTo(false)} />}
       </>
     );
-  }
-
-  if (screen === 'permission') {
-    return (
-      <>
-        <audio
-          ref={audioRef}
-          src={assetUrl('assets/audio/rabbit-hole-bgm.mp3')}
-          loop
-          preload="auto"
-          volume="0.35"
-        />
-        <MusicButton
-          muted={musicMuted}
-          playing={musicPlaying}
-          onToggle={toggleMusic}
-        />
-        <PermissionScreen
-          onAllow={requestMotion}
-          onFallback={() => beginGame('joystick')}
-          requesting={requesting}
-          error={permissionError}
-        />
-      </>
-    );
-  }
-
-  if (screen === 'ending') {
-    return (
-      <>
-        <audio
-          ref={audioRef}
-          src={assetUrl('assets/audio/rabbit-hole-bgm.mp3')}
-          loop
-          preload="auto"
-          volume="0.35"
-        />
-        <MusicButton
-          muted={musicMuted}
-          playing={musicPlaying}
-          onToggle={toggleMusic}
-        />
-        <Ending onReplay={() => setScreen('start')} />
-      </>
-    );
-  }
-
-  const fragmentItems = collected.filter((item) => item.type === 'fragment');
-  return (
-    <>
-      <audio
-        ref={audioRef}
-        src={assetUrl('assets/audio/rabbit-hole-bgm.mp3')}
-        loop
-        preload="auto"
-        volume="0.35"
+  } else if (screen === 'permission') {
+    content = (
+      <PermissionScreen
+        onAllow={requestMotion}
+        onFallback={() => beginGame('joystick')}
+        requesting={requesting}
+        error={permissionError}
       />
-      <MusicButton
-        muted={musicMuted}
-        playing={musicPlaying}
-        onToggle={toggleMusic}
+    );
+  } else if (screen === 'chapters') {
+    content = (
+      <ChapterScreen
+        progress={progress}
+        onSelect={(id) => openPermission(id)}
+        onBack={() => setScreen('start')}
       />
+    );
+  } else if (screen === 'ending') {
+    content = (
+      <Ending
+        progress={progress}
+        onChapters={() => setScreen('chapters')}
+        onReplay={startOver}
+      />
+    );
+  } else {
+    const fragmentItems = collected.filter((item) => item.type === 'fragment');
+    content = (
       <main
         className="game-shell"
         style={{ '--garden-art': `url("${assetUrl('assets/art/dream-garden.jpg')}")` }}
@@ -479,9 +534,8 @@ export default function App() {
             <p>{level.eyebrow}</p>
             <h1>{level.name}</h1>
           </div>
-          <button className="pause-button" onClick={() => setPaused(true)} aria-label="暂停">
-            <i /><i />
-          </button>
+          <div className="mechanic-badge">{level.mechanic}</div>
+          <button className="pause-button" onClick={() => setPaused(true)} aria-label="暂停"><i /><i /></button>
         </header>
 
         <section className="canvas-frame">
@@ -491,7 +545,9 @@ export default function App() {
             paused={paused || interlude}
             resetToken={resetToken}
             onCollect={handleCollect}
-            onLockedDoor={() => setToast(level.lockedHint || '门仍在等你找回缺少的东西。')}
+            onSwitch={handleSwitch}
+            onDeath={handleDeath}
+            onLockedDoor={() => setToast(level.lockedHint || '门仍在等待缺少的证据。')}
             onComplete={handleComplete}
           />
           <div className="corner corner-tl" />
@@ -522,20 +578,32 @@ export default function App() {
           <PauseModal
             onResume={() => setPaused(false)}
             onRestart={restart}
+            onChapters={() => {
+              setPaused(false);
+              setScreen('chapters');
+            }}
             onQuit={() => {
               setPaused(false);
               setScreen('start');
             }}
           />
         )}
-        {interlude && (
-          <LevelInterlude
-            level={level}
-            onContinue={continueAfterLevel}
-            isLast={levelIndex === levels.length - 1}
-          />
-        )}
+        {interlude && <LevelInterlude level={level} onContinue={continueAfterLevel} />}
       </main>
+    );
+  }
+
+  return (
+    <>
+      <audio
+        ref={audioRef}
+        src={assetUrl('assets/audio/rabbit-hole-bgm.mp3')}
+        loop
+        preload="auto"
+        volume="0.35"
+      />
+      <MusicButton muted={musicMuted} playing={musicPlaying} onToggle={toggleMusic} />
+      {content}
     </>
   );
 }
