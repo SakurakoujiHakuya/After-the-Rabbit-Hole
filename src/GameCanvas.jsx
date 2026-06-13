@@ -5,6 +5,7 @@ import {
   activateSwitch,
   circleRectCollision,
   getMoverRect,
+  getPhaseWalls,
   getRotatorWalls,
   makeBall,
   overlapsItem,
@@ -284,11 +285,21 @@ function drawPaintable(ctx, rose, painted, time) {
   ctx.restore();
 }
 
-function drawSwitch(ctx, item, active, time) {
+function drawSwitch(ctx, item, active, time, art) {
   ctx.save();
   ctx.translate(item.x, item.y);
   ctx.shadowColor = active ? '#f3cf80' : 'transparent';
   ctx.shadowBlur = 15;
+  if (item.action === 'phase' && art.chessPawn?.complete) {
+    const bob = Math.sin(time / 340 + item.x) * 1.2;
+    const size = item.r * 2.65;
+    ctx.shadowColor = active ? '#edf0dd' : '#9aaad0';
+    ctx.shadowBlur = active ? 18 : 10;
+    ctx.globalAlpha = active ? 0.72 : 1;
+    ctx.drawImage(art.chessPawn, -size / 2, -size / 2 + bob, size, size);
+    ctx.restore();
+    return;
+  }
   ctx.fillStyle = active ? '#c9a85d' : '#5e5570';
   ctx.strokeStyle = active ? '#fae1a1' : '#a89cbf';
   ctx.lineWidth = 2;
@@ -302,8 +313,33 @@ function drawSwitch(ctx, item, active, time) {
   ctx.textBaseline = 'middle';
   const symbol = item.action === 'rotate'
     ? '↻'
+    : item.action === 'phase' ? '♟'
     : item.minRadius ? '⚖' : active ? '✓' : item.symbol || '?';
   ctx.fillText(symbol, 0, 1 + Math.sin(time / 300));
+  ctx.restore();
+}
+
+function drawPhaseWall(ctx, wall, time) {
+  ctx.save();
+  const gradient = ctx.createLinearGradient(wall.x, wall.y, wall.x + wall.w, wall.y + wall.h);
+  gradient.addColorStop(0, 'rgba(211, 224, 239, .92)');
+  gradient.addColorStop(0.5, 'rgba(102, 91, 132, .9)');
+  gradient.addColorStop(1, 'rgba(28, 34, 55, .94)');
+  ctx.fillStyle = gradient;
+  ctx.strokeStyle = 'rgba(232, 224, 248, .76)';
+  ctx.shadowColor = '#a8bad9';
+  ctx.shadowBlur = 10 + Math.sin(time / 320) * 2;
+  roundedRect(ctx, wall.x, wall.y, wall.w, wall.h, 4);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowColor = 'transparent';
+  const tile = 16;
+  for (let x = wall.x; x < wall.x + wall.w; x += tile) {
+    ctx.fillStyle = ((x - wall.x) / tile) % 2
+      ? 'rgba(21, 25, 42, .35)'
+      : 'rgba(244, 237, 221, .22)';
+    ctx.fillRect(x, wall.y, Math.min(tile, wall.x + wall.w - x), wall.h);
+  }
   ctx.restore();
 }
 
@@ -573,7 +609,20 @@ export default function GameCanvas({
     const teaTable = new Image();
     teaTable.crossOrigin = 'anonymous';
     teaTable.src = assetUrl('assets/art/rotating-tea-table.png');
-    artRef.current = { garden, avatar, teacup, cardGuard, mushroom, watch, cameo, teaTable };
+    const chessPawn = new Image();
+    chessPawn.crossOrigin = 'anonymous';
+    chessPawn.src = assetUrl('assets/art/mirror-chess-pawn.png');
+    artRef.current = {
+      garden,
+      avatar,
+      teacup,
+      cardGuard,
+      mushroom,
+      watch,
+      cameo,
+      teaTable,
+      chessPawn,
+    };
   }, []);
 
   useEffect(() => {
@@ -590,6 +639,7 @@ export default function GameCanvas({
       touchingSwitches: new Set(),
       sequenceIndex: 0,
       rotations: new Map((level.rotators || []).map((rotator) => [rotator.id, 0])),
+      phases: new Map((level.phases || []).map((phase) => [phase.id, phase.initial || 0])),
       particles: [],
       shakeUntil: 0,
       startedAt: performance.now(),
@@ -631,6 +681,11 @@ export default function GameCanvas({
           getRotatorWalls(rotator, state.rotations.get(rotator.id) || 0)
         ))
         : [];
+      const phaseWalls = state
+        ? (level.phases || []).flatMap((phase) => (
+          getPhaseWalls(phase, state.phases.get(phase.id) || 0)
+        ))
+        : [];
 
       if (state && !paused && !state.complete) {
         const mirrorZone = (level.zones || []).find((zone) => zone.type === 'mirror' && pointInRect(state.player, zone));
@@ -641,7 +696,12 @@ export default function GameCanvas({
           x: (mirrorZone ? -input.x : input.x) + currentZones.reduce((sum, zone) => sum + (zone.forceX || 0), 0),
           y: input.y + currentZones.reduce((sum, zone) => sum + (zone.forceY || 0), 0),
         };
-        updateBall(state.player, gravity, [...level.walls, ...activeGates, ...rotatorWalls], dt, {
+        updateBall(state.player, gravity, [
+          ...level.walls,
+          ...activeGates,
+          ...rotatorWalls,
+          ...phaseWalls,
+        ], dt, {
           friction: onIce ? 0.996 : 0.982,
           maxSpeed: onIce ? 5.8 : 4.8,
         });
@@ -693,6 +753,40 @@ export default function GameCanvas({
                 rotations: Object.fromEntries(state.rotations),
                 activeIds: [...state.switches],
               });
+            }
+            continue;
+          }
+          if (trigger.action === 'phase') {
+            if (state.switches.has(trigger.id)) continue;
+            const result = activateSwitch(
+              level.switchSequence,
+              state.switches,
+              state.sequenceIndex,
+              trigger.id,
+            );
+            state.switches = result.switches;
+            state.sequenceIndex = result.sequenceIndex;
+            if (result.status === 'reset') {
+              state.shakeUntil = time + 120;
+            } else {
+              const phase = (level.phases || []).find((entry) => entry.id === trigger.target);
+              if (phase) {
+                const currentPhase = state.phases.get(phase.id) || 0;
+                const nextPhase = (currentPhase + 1) % phase.wallsByState.length;
+                state.phases.set(phase.id, nextPhase);
+                state.shakeUntil = time + 140;
+                spawnBurst(state, trigger.x, trigger.y, nextPhase ? '#d9e7f2' : '#8b789e', 15);
+                callbacksRef.current.onSwitch({
+                  ...trigger,
+                  phaseId: phase.id,
+                  phaseState: nextPhase,
+                  phases: Object.fromEntries(state.phases),
+                  sequenceStatus: result.status,
+                  sequenceIndex: result.sequenceIndex,
+                  sequenceLength: level.switchSequence?.length,
+                  activeIds: [...state.switches],
+                });
+              }
             }
             continue;
           }
@@ -760,6 +854,7 @@ export default function GameCanvas({
       (level.decorations || []).forEach((decoration) => drawDecoration(ctx, decoration, artRef.current, time));
       level.walls.forEach((wall, index) => drawWall(ctx, wall, index));
       activeGates.forEach((gate) => drawGate(ctx, gate, false));
+      phaseWalls.forEach((wall) => drawPhaseWall(ctx, wall, time));
       (level.rotators || []).forEach((rotator) => {
         const turn = state?.rotations.get(rotator.id) || 0;
         drawRotator(ctx, rotator, getRotatorWalls(rotator, turn), turn, time, artRef.current);
@@ -777,7 +872,7 @@ export default function GameCanvas({
           const active = item.action === 'rotate'
             ? (state.rotations.get(item.target) || 0) > 0
             : state.switches.has(item.id);
-          drawSwitch(ctx, item, active, time);
+          drawSwitch(ctx, item, active, time, artRef.current);
         });
         for (const item of level.items || []) {
           if (!state.collected.has(item.id)) drawItem(ctx, item, time, artRef.current);

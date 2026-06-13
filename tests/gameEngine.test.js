@@ -4,6 +4,7 @@ import {
   activateSwitch,
   circleRectCollision,
   getMoverRect,
+  getPhaseWalls,
   getRotatorWalls,
   makeBall,
   requirementsMet,
@@ -110,4 +111,23 @@ test('checks required painted roses', () => {
   };
   assert.equal(requirementsMet({ painted: ['rose-a', 'rose-b'] }, state), true);
   assert.equal(requirementsMet({ painted: ['rose-a', 'rose-c'] }, state), false);
+});
+
+test('selects walls for a world phase and checks the required phase', () => {
+  const phase = {
+    id: 'mirror',
+    wallsByState: [
+      [{ x: 10, y: 20, w: 30, h: 8 }],
+      [{ x: 40, y: 50, w: 8, h: 30 }],
+    ],
+  };
+  assert.equal(getPhaseWalls(phase, 1)[0].x, 40);
+  assert.equal(getPhaseWalls(phase, 1)[0].phaseId, 'mirror');
+  const state = {
+    collected: new Set(),
+    switches: new Set(),
+    phases: new Map([['mirror', 1]]),
+  };
+  assert.equal(requirementsMet({ phases: { mirror: 1 } }, state), true);
+  assert.equal(requirementsMet({ phases: { mirror: 0 } }, state), false);
 });

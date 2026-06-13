@@ -1,16 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { circleRectCollision, getRotatorWalls } from '../src/gameEngine.js';
+import { circleRectCollision, getPhaseWalls, getRotatorWalls } from '../src/gameEngine.js';
 import { levels, levelById } from '../src/levels.js';
 
-function canReach(level, turns, target) {
+function canReach(level, turns, target, phaseStates = {}, start = level.start) {
   const step = 4;
   const columns = 90;
   const rows = 160;
   const dynamicWalls = (level.rotators || []).flatMap((rotator) => (
     getRotatorWalls(rotator, turns[rotator.id] || 0)
   ));
-  const walls = [...level.walls, ...dynamicWalls];
+  const phaseWalls = (level.phases || []).flatMap((phase) => (
+    getPhaseWalls(phase, phaseStates[phase.id] ?? phase.initial ?? 0)
+  ));
+  const walls = [...level.walls, ...dynamicWalls, ...phaseWalls];
   const seen = new Uint8Array(columns * rows);
   const queue = [];
   const push = (x, y) => {
@@ -24,7 +27,7 @@ function canReach(level, turns, target) {
     seen[index] = 1;
     queue.push([column, row]);
   };
-  push(level.start.x, level.start.y);
+  push(start.x, start.y);
   for (let index = 0; index < queue.length; index += 1) {
     const [column, row] = queue[index];
     const x = column * step;
@@ -49,6 +52,40 @@ test('uses valid references throughout the chapter graph', () => {
     for (const choice of level.choices || []) {
       assert.ok(levelById[choice.next], `${level.id} choice -> ${choice.next}`);
     }
+  }
+});
+
+test('builds solvable staged routes through phase-changing maps', () => {
+  for (const level of levels.filter((entry) => entry.phases?.length)) {
+    const phaseIds = new Set(level.phases.map((entry) => entry.id));
+    for (const [id, state] of Object.entries(level.goal.requires?.phases || {})) {
+      assert.ok(phaseIds.has(id), `${level.id} requires missing phase ${id}`);
+      const phase = level.phases.find((entry) => entry.id === id);
+      assert.ok(state >= 0 && state < phase.wallsByState.length);
+    }
+    const controls = level.switches.filter((entry) => entry.action === 'phase');
+    let start = level.start;
+    let state = level.phases[0].initial || 0;
+    for (const control of controls) {
+      assert.equal(
+        canReach(level, {}, control, { [control.target]: state }, start),
+        true,
+        `${level.id} cannot reach ${control.id} in phase ${state}`,
+      );
+      start = control;
+      const phase = level.phases.find((entry) => entry.id === control.target);
+      state = (state + 1) % phase.wallsByState.length;
+    }
+    const goal = {
+      x: level.goal.x + level.goal.w / 2,
+      y: level.goal.y + level.goal.h / 2,
+      r: 14,
+    };
+    assert.equal(
+      canReach(level, {}, goal, { [level.phases[0].id]: state }, start),
+      true,
+      `${level.id} cannot reach goal after phase sequence`,
+    );
   }
 });
 

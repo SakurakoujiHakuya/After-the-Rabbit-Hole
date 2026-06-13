@@ -309,6 +309,7 @@ export default function App() {
   const [collected, setCollected] = useState([]);
   const [activated, setActivated] = useState([]);
   const [rotations, setRotations] = useState({});
+  const [phases, setPhases] = useState({});
   const [painted, setPainted] = useState([]);
   const [runDeaths, setRunDeaths] = useState(0);
   const [lastResult, setLastResult] = useState(null);
@@ -367,6 +368,7 @@ export default function App() {
     setCollected([]);
     setActivated([]);
     setRotations({});
+    setPhases({});
     setPainted([]);
     setRunDeaths(0);
     setLastResult(null);
@@ -468,6 +470,7 @@ export default function App() {
     setCollected([]);
     setActivated([]);
     setRotations({});
+    setPhases({});
     setPainted([]);
     setRunDeaths(0);
     setPaused(false);
@@ -510,6 +513,11 @@ export default function App() {
     if (trigger.rotationId) {
       setRotations(trigger.rotations || {});
       setToast(trigger.rotationTurn === 1 ? '房间转过了九十度。' : '房间回到了原来的方向。');
+    } else if (trigger.phaseId) {
+      setPhases(trigger.phases || {});
+      setToast(trigger.phaseState
+        ? '白棋醒来，前方的镜门改变了位置。'
+        : '黑棋醒来，身后的路被镜面封住。');
     } else if (trigger.sequenceStatus === 'reset') {
       setToast('顺序错了。镜子把所有印章熄灭了。');
     } else if (trigger.sequenceStatus === 'complete') {
@@ -576,6 +584,7 @@ export default function App() {
     setCollected([]);
     setActivated([]);
     setRotations({});
+    setPhases({});
     setPainted([]);
     setRunDeaths(0);
     setLastResult(null);
@@ -685,6 +694,11 @@ export default function App() {
               {Object.entries(level.goal.requires?.rotations || {}).map(([id, turn]) => (
                 <span key={id} className={rotations[id] === turn ? 'done' : ''}>
                   {rotations[id] === turn ? '✓' : '↻'} 房间
+                </span>
+              ))}
+              {Object.entries(level.goal.requires?.phases || {}).map(([id, phase]) => (
+                <span key={id} className={phases[id] === phase ? 'done' : ''}>
+                  {phases[id] === phase ? '✓' : '♟'} 棋局
                 </span>
               ))}
               {(level.goal.requires?.painted || []).length > 0 && (

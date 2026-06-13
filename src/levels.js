@@ -329,9 +329,9 @@ const levelList = [
     chapter: '第七章',
     eyebrow: 'VII · 镜中走廊',
     name: '门在你的倒影身后',
-    mechanic: '镜像、传送与顺序',
-    parTime: 95000,
-    hint: '按照月亮、钥匙、玫瑰的顺序点亮镜中印章',
+    mechanic: '镜像棋盘与变形地图',
+    parTime: 105000,
+    hint: '依次唤醒三枚棋子；黑白交替时，镜门会封住旧路并打开新路',
     quote: '她向前走了两步，却看见自己从另一边靠近。',
     start: { x: 54, y: 570 },
     goal: {
@@ -339,7 +339,10 @@ const levelList = [
       y: 38,
       w: 43,
       h: 52,
-      requires: { switches: ['moon-seal', 'key-seal', 'rose-seal'] },
+      requires: {
+        switches: ['glass-pawn-1', 'glass-pawn-2', 'glass-pawn-3'],
+        phases: { 'mirror-chess': 1 },
+      },
     },
     next: ['trial-of-names'],
     items: [{ id: 'cameo-mirror', type: 'curiosity', x: 180, y: 360, r: 11 }],
@@ -347,15 +350,26 @@ const levelList = [
       { type: 'mirror', x: 34, y: 326, w: 292, h: 176 },
       { type: 'current', x: 34, y: 128, w: 292, h: 82, forceX: 0, forceY: 0.7 },
     ],
-    portals: [
-      { id: 'glass-a', pairId: 'glass-b', color: '#a8c9cc', x: 286, y: 280, r: 18 },
-      { id: 'glass-b', pairId: 'glass-a', color: '#a8c9cc', x: 74, y: 128, r: 18 },
+    phases: [
+      {
+        id: 'mirror-chess',
+        initial: 0,
+        wallsByState: [
+          [
+            { x: 240, y: 512, w: 102, h: 18 },
+            { x: 240, y: 92, w: 102, h: 18 },
+          ],
+          [
+            { x: 240, y: 308, w: 102, h: 18 },
+          ],
+        ],
+      },
     ],
-    switchSequence: ['moon-seal', 'key-seal', 'rose-seal'],
+    switchSequence: ['glass-pawn-1', 'glass-pawn-2', 'glass-pawn-3'],
     switches: [
-      { id: 'moon-seal', symbol: '☾', x: 286, y: 280, r: 18 },
-      { id: 'key-seal', symbol: '⚿', x: 74, y: 128, r: 18 },
-      { id: 'rose-seal', symbol: '✿', x: 286, y: 110, r: 18 },
+      { id: 'glass-pawn-1', action: 'phase', target: 'mirror-chess', x: 300, y: 560, r: 18 },
+      { id: 'glass-pawn-2', action: 'phase', target: 'mirror-chess', x: 60, y: 360, r: 18 },
+      { id: 'glass-pawn-3', action: 'phase', target: 'mirror-chess', x: 60, y: 150, r: 18 },
     ],
     hazards: [{ id: 'mirror-hole', type: 'whirlpool', x: 180, y: 169, r: 19 }],
     walls: [

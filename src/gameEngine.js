@@ -135,6 +135,15 @@ export function getRotatorWalls(rotator, quarterTurns = 0) {
   }));
 }
 
+export function getPhaseWalls(phase, state = 0) {
+  return (phase.wallsByState[state] || []).map((wall, index) => ({
+    ...wall,
+    id: `${phase.id}-wall-${state}-${index}`,
+    phaseId: phase.id,
+    phaseState: state,
+  }));
+}
+
 export function requirementsMet(requirements, state) {
   if (!requirements) return true;
   const itemReady = (requirements.items || []).every((id) => state.collected.has(id));
@@ -142,13 +151,16 @@ export function requirementsMet(requirements, state) {
   const rotationReady = Object.entries(requirements.rotations || {}).every(
     ([id, turn]) => (state.rotations?.get(id) || 0) === turn,
   );
+  const phaseReady = Object.entries(requirements.phases || {}).every(
+    ([id, phase]) => (state.phases?.get(id) || 0) === phase,
+  );
   const paintedReady = (requirements.painted || []).every(
     (id) => state.painted?.has(id),
   );
   const fragmentReady =
     !requirements.fragments ||
     [...state.collected].filter((id) => id.startsWith('name-')).length >= requirements.fragments;
-  return itemReady && switchReady && rotationReady && paintedReady && fragmentReady;
+  return itemReady && switchReady && rotationReady && phaseReady && paintedReady && fragmentReady;
 }
 
 export function activateSwitch(sequence, switches, sequenceIndex, triggerId) {
