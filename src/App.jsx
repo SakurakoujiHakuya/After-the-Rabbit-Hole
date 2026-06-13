@@ -308,6 +308,7 @@ export default function App() {
   const [toast, setToast] = useState('');
   const [collected, setCollected] = useState([]);
   const [activated, setActivated] = useState([]);
+  const [rotations, setRotations] = useState({});
   const [runDeaths, setRunDeaths] = useState(0);
   const [lastResult, setLastResult] = useState(null);
   const inputRef = useRef({
@@ -364,6 +365,7 @@ export default function App() {
     setLevelId(targetLevelId);
     setCollected([]);
     setActivated([]);
+    setRotations({});
     setRunDeaths(0);
     setLastResult(null);
     setPaused(false);
@@ -463,6 +465,7 @@ export default function App() {
   const restart = () => {
     setCollected([]);
     setActivated([]);
+    setRotations({});
     setRunDeaths(0);
     setPaused(false);
     setResetToken((value) => value + 1);
@@ -489,7 +492,10 @@ export default function App() {
 
   const handleSwitch = (trigger) => {
     setActivated(trigger.activeIds || []);
-    if (trigger.sequenceStatus === 'reset') {
+    if (trigger.rotationId) {
+      setRotations(trigger.rotations || {});
+      setToast(trigger.rotationTurn === 1 ? '房间转过了九十度。' : '房间回到了原来的方向。');
+    } else if (trigger.sequenceStatus === 'reset') {
       setToast('顺序错了。镜子把所有印章熄灭了。');
     } else if (trigger.sequenceStatus === 'complete') {
       setToast('最后一枚印章回应了你。');
@@ -554,6 +560,7 @@ export default function App() {
     setLevelId(nextLevelId);
     setCollected([]);
     setActivated([]);
+    setRotations({});
     setRunDeaths(0);
     setLastResult(null);
     setResetToken((value) => value + 1);
@@ -658,6 +665,11 @@ export default function App() {
                   {fragmentItems.length}/{level.goal.requires.fragments} 名字
                 </span>
               )}
+              {Object.entries(level.goal.requires?.rotations || {}).map(([id, turn]) => (
+                <span key={id} className={rotations[id] === turn ? 'done' : ''}>
+                  {rotations[id] === turn ? '✓' : '↻'} 房间
+                </span>
+              ))}
               {level.items?.some((item) => item.type === 'curiosity') && (
                 <span className={
                   collected.some((item) => item.type === 'curiosity') ||

@@ -99,14 +99,44 @@ export function getMoverRect(mover, time) {
   };
 }
 
+export function rotateRect(rect, centerX, centerY, quarterTurns) {
+  const turns = ((quarterTurns % 4) + 4) % 4;
+  let result = { ...rect };
+  for (let turn = 0; turn < turns; turn += 1) {
+    const rectCenterX = result.x + result.w / 2;
+    const rectCenterY = result.y + result.h / 2;
+    const rotatedCenterX = centerX - (rectCenterY - centerY);
+    const rotatedCenterY = centerY + (rectCenterX - centerX);
+    result = {
+      ...result,
+      x: rotatedCenterX - result.h / 2,
+      y: rotatedCenterY - result.w / 2,
+      w: result.h,
+      h: result.w,
+    };
+  }
+  return result;
+}
+
+export function getRotatorWalls(rotator, quarterTurns = 0) {
+  return rotator.walls.map((wall, index) => ({
+    ...rotateRect(wall, rotator.centerX, rotator.centerY, quarterTurns),
+    id: `${rotator.id}-wall-${index}`,
+    rotatorId: rotator.id,
+  }));
+}
+
 export function requirementsMet(requirements, state) {
   if (!requirements) return true;
   const itemReady = (requirements.items || []).every((id) => state.collected.has(id));
   const switchReady = (requirements.switches || []).every((id) => state.switches.has(id));
+  const rotationReady = Object.entries(requirements.rotations || {}).every(
+    ([id, turn]) => (state.rotations?.get(id) || 0) === turn,
+  );
   const fragmentReady =
     !requirements.fragments ||
     [...state.collected].filter((id) => id.startsWith('name-')).length >= requirements.fragments;
-  return itemReady && switchReady && fragmentReady;
+  return itemReady && switchReady && rotationReady && fragmentReady;
 }
 
 export function activateSwitch(sequence, switches, sequenceIndex, triggerId) {

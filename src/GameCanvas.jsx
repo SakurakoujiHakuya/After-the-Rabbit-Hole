@@ -5,6 +5,7 @@ import {
   activateSwitch,
   circleRectCollision,
   getMoverRect,
+  getRotatorWalls,
   makeBall,
   overlapsItem,
   pointInRect,
@@ -245,7 +246,10 @@ function drawSwitch(ctx, item, active, time) {
   ctx.font = `${Math.max(12, item.r)}px serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(item.minRadius ? '⚖' : active ? '✓' : item.symbol || '?', 0, 1 + Math.sin(time / 300));
+  const symbol = item.action === 'rotate'
+    ? '↻'
+    : item.minRadius ? '⚖' : active ? '✓' : item.symbol || '?';
+  ctx.fillText(symbol, 0, 1 + Math.sin(time / 300));
   ctx.restore();
 }
 
@@ -259,6 +263,39 @@ function drawGate(ctx, gate, open) {
   ctx.fillRect(gate.x, gate.y, gate.w, gate.h);
   ctx.strokeRect(gate.x, gate.y, gate.w, gate.h);
   ctx.restore();
+}
+
+function drawRotator(ctx, rotator, walls, turn, time, art) {
+  ctx.save();
+  ctx.translate(rotator.centerX, rotator.centerY);
+  if (rotator.art === 'tea-table' && art.teaTable?.complete) {
+    const size = rotator.artSize || 104;
+    ctx.save();
+    ctx.rotate(turn * Math.PI / 2);
+    ctx.globalAlpha = 0.72;
+    ctx.shadowColor = 'rgba(208, 173, 98, .38)';
+    ctx.shadowBlur = 12;
+    ctx.drawImage(art.teaTable, -size / 2, -size / 2, size, size);
+    ctx.restore();
+  }
+  ctx.strokeStyle = 'rgba(231, 207, 145, .38)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 6]);
+  ctx.beginPath();
+  ctx.arc(0, 0, 31 + Math.sin(time / 420) * 1.5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(211, 176, 101, .22)';
+  ctx.beginPath();
+  ctx.arc(0, 0, 18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#e8d39c';
+  ctx.font = '14px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(turn % 2 ? '↕' : '↔', 0, 1);
+  ctx.restore();
+  walls.forEach((wall, index) => drawWall(ctx, wall, index + 20));
 }
 
 function drawPortal(ctx, portal, time, image) {
@@ -469,7 +506,10 @@ export default function GameCanvas({
     const cameo = new Image();
     cameo.crossOrigin = 'anonymous';
     cameo.src = assetUrl('assets/art/rabbit-cameo.png');
-    artRef.current = { garden, avatar, teacup, cardGuard, mushroom, watch, cameo };
+    const teaTable = new Image();
+    teaTable.crossOrigin = 'anonymous';
+    teaTable.src = assetUrl('assets/art/rotating-tea-table.png');
+    artRef.current = { garden, avatar, teacup, cardGuard, mushroom, watch, cameo, teaTable };
   }, []);
 
   useEffect(() => {
@@ -484,6 +524,7 @@ export default function GameCanvas({
       deathCooldown: 0,
       touchingSwitches: new Set(),
       sequenceIndex: 0,
+      rotations: new Map((level.rotators || []).map((rotator) => [rotator.id, 0])),
       particles: [],
       shakeUntil: 0,
       startedAt: performance.now(),
@@ -520,6 +561,11 @@ export default function GameCanvas({
       previous = time;
       const movers = (level.movers || []).map((mover) => getMoverRect(mover, time));
       const activeGates = state ? getActiveGates(level, state.switches) : [];
+      const rotatorWalls = state
+        ? (level.rotators || []).flatMap((rotator) => (
+          getRotatorWalls(rotator, state.rotations.get(rotator.id) || 0)
+        ))
+        : [];
 
       if (state && !paused && !state.complete) {
         const mirrorZone = (level.zones || []).find((zone) => zone.type === 'mirror' && pointInRect(state.player, zone));
@@ -530,7 +576,7 @@ export default function GameCanvas({
           x: (mirrorZone ? -input.x : input.x) + currentZones.reduce((sum, zone) => sum + (zone.forceX || 0), 0),
           y: input.y + currentZones.reduce((sum, zone) => sum + (zone.forceY || 0), 0),
         };
-        updateBall(state.player, gravity, [...level.walls, ...activeGates], dt, {
+        updateBall(state.player, gravity, [...level.walls, ...activeGates, ...rotatorWalls], dt, {
           friction: onIce ? 0.996 : 0.982,
           maxSpeed: onIce ? 5.8 : 4.8,
         });
@@ -553,6 +599,24 @@ export default function GameCanvas({
         for (const trigger of level.switches || []) {
           if (!touchingSwitches.has(trigger.id) || state.touchingSwitches.has(trigger.id)) continue;
           if (trigger.minRadius && state.player.radius < trigger.minRadius) continue;
+          if (trigger.action === 'rotate') {
+            const rotator = (level.rotators || []).find((entry) => entry.id === trigger.target);
+            if (rotator) {
+              const currentTurn = state.rotations.get(rotator.id) || 0;
+              const nextTurn = (currentTurn + 1) % (rotator.states || 4);
+              state.rotations.set(rotator.id, nextTurn);
+              state.shakeUntil = time + 110;
+              spawnBurst(state, rotator.centerX, rotator.centerY, '#e4c67e', 16);
+              callbacksRef.current.onSwitch({
+                ...trigger,
+                rotationId: rotator.id,
+                rotationTurn: nextTurn,
+                rotations: Object.fromEntries(state.rotations),
+                activeIds: [...state.switches],
+              });
+            }
+            continue;
+          }
           if (!level.switchSequence && state.switches.has(trigger.id)) continue;
           const result = activateSwitch(
             level.switchSequence,
@@ -617,13 +681,22 @@ export default function GameCanvas({
       (level.decorations || []).forEach((decoration) => drawDecoration(ctx, decoration, artRef.current, time));
       level.walls.forEach((wall, index) => drawWall(ctx, wall, index));
       activeGates.forEach((gate) => drawGate(ctx, gate, false));
+      (level.rotators || []).forEach((rotator) => {
+        const turn = state?.rotations.get(rotator.id) || 0;
+        drawRotator(ctx, rotator, getRotatorWalls(rotator, turn), turn, time, artRef.current);
+      });
       movers.forEach((mover) => drawMover(ctx, mover, artRef.current));
       (level.hazards || []).forEach((hazard) => drawHazard(ctx, hazard, time));
       (level.portals || []).forEach((portal) => drawPortal(ctx, portal, time, artRef.current.teacup));
 
       if (state) {
         drawDoor(ctx, level.goal, requirementsMet(level.goal.requires, state), time);
-        (level.switches || []).forEach((item) => drawSwitch(ctx, item, state.switches.has(item.id), time));
+        (level.switches || []).forEach((item) => {
+          const active = item.action === 'rotate'
+            ? (state.rotations.get(item.target) || 0) > 0
+            : state.switches.has(item.id);
+          drawSwitch(ctx, item, active, time);
+        });
         for (const item of level.items || []) {
           if (!state.collected.has(item.id)) drawItem(ctx, item, time, artRef.current);
         }

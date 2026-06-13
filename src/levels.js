@@ -200,9 +200,9 @@ const levelList = [
     chapter: '第五章 B',
     eyebrow: 'V-B · 疯茶会',
     name: '时间卡在六点',
-    mechanic: '传送茶杯与冰桌',
+    mechanic: '传送与旋转茶桌',
     parTime: 75000,
-    hint: '同色茶杯彼此相连，桌布会让你停不下来',
+    hint: '踩下回转曲柄，让茶桌改成通往门的方向',
     quote: '他们不断换座位，因为时间拒绝再向前走。',
     start: { x: 52, y: 568 },
     goal: {
@@ -210,7 +210,7 @@ const levelList = [
       y: 38,
       w: 42,
       h: 52,
-      requires: { items: ['watch-hand'] },
+      requires: { items: ['watch-hand'], rotations: { 'tea-table': 1 } },
     },
     next: ['queen-garden'],
     items: [
@@ -233,6 +233,28 @@ const levelList = [
         w: 25,
         h: 25,
         speed: 0.0015,
+      },
+    ],
+    switches: [
+      {
+        id: 'tea-crank',
+        action: 'rotate',
+        target: 'tea-table',
+        symbol: '↻',
+        x: 292,
+        y: 350,
+        r: 18,
+      },
+    ],
+    rotators: [
+      {
+        id: 'tea-table',
+        centerX: 180,
+        centerY: 350,
+        states: 2,
+        art: 'tea-table',
+        artSize: 112,
+        walls: [{ x: 172, y: 343, w: 80, h: 14 }],
       },
     ],
     portals: [
@@ -346,7 +368,7 @@ const levelList = [
     name: '谁偷走了她的名字',
     mechanic: '全部机制综合',
     parTime: 120000,
-    hint: '找回三个词，点亮证词印章，避开最后的规则',
+    hint: '找回三个词，旋转法庭，再点亮证词印章',
     quote: '当所有人都要求她证明自己，她终于决定亲口说出答案。',
     start: { x: 180, y: 572 },
     goal: {
@@ -354,7 +376,11 @@ const levelList = [
       y: 36,
       w: 42,
       h: 56,
-      requires: { fragments: 3, switches: ['verdict'] },
+      requires: {
+        fragments: 3,
+        switches: ['verdict'],
+        rotations: { 'court-room': 1 },
+      },
     },
     fragments: ['我', '记得', '自己'],
     ending: true,
@@ -364,7 +390,27 @@ const levelList = [
       { id: 'name-3', type: 'fragment', word: '自己', x: 58, y: 206, r: 13 },
       { id: 'cameo-trial', type: 'curiosity', x: 300, y: 294, r: 11 },
     ],
-    switches: [{ id: 'verdict', x: 300, y: 170, r: 18 }],
+    switches: [
+      { id: 'verdict', x: 300, y: 170, r: 18 },
+      {
+        id: 'court-crank',
+        action: 'rotate',
+        target: 'court-room',
+        symbol: '↻',
+        x: 58,
+        y: 300,
+        r: 18,
+      },
+    ],
+    rotators: [
+      {
+        id: 'court-room',
+        centerX: 180,
+        centerY: 300,
+        states: 2,
+        walls: [{ x: 180, y: 293, w: 80, h: 14 }],
+      },
+    ],
     zones: [{ type: 'mirror', x: 100, y: 252, w: 160, h: 120 }],
     hazards: [
       { id: 'ink-1', type: 'whirlpool', x: 180, y: 470, r: 17 },

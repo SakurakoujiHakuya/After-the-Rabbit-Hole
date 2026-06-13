@@ -1,7 +1,47 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { circleRectCollision } from '../src/gameEngine.js';
+import { circleRectCollision, getRotatorWalls } from '../src/gameEngine.js';
 import { levels, levelById } from '../src/levels.js';
+
+function canReach(level, turns, target) {
+  const step = 4;
+  const columns = 90;
+  const rows = 160;
+  const dynamicWalls = (level.rotators || []).flatMap((rotator) => (
+    getRotatorWalls(rotator, turns[rotator.id] || 0)
+  ));
+  const walls = [...level.walls, ...dynamicWalls];
+  const seen = new Uint8Array(columns * rows);
+  const queue = [];
+  const push = (x, y) => {
+    const column = Math.round(x / step);
+    const row = Math.round(y / step);
+    if (column < 0 || column >= columns || row < 0 || row >= rows) return;
+    const index = row * columns + column;
+    if (seen[index]) return;
+    const player = { x: column * step, y: row * step, radius: 13 };
+    if (walls.some((wall) => circleRectCollision(player, wall))) return;
+    seen[index] = 1;
+    queue.push([column, row]);
+  };
+  push(level.start.x, level.start.y);
+  for (let index = 0; index < queue.length; index += 1) {
+    const [column, row] = queue[index];
+    const x = column * step;
+    const y = row * step;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      push(x + dx * step, y + dy * step);
+    }
+    for (const portal of level.portals || []) {
+      if (Math.hypot(x - portal.x, y - portal.y) > 13 + portal.r) continue;
+      const pair = level.portals.find((entry) => entry.id === portal.pairId);
+      if (pair) push(pair.x, pair.y);
+    }
+  }
+  return queue.some(([column, row]) => (
+    Math.hypot(column * step - target.x, row * step - target.y) <= 13 + (target.r || 12)
+  ));
+}
 
 test('uses valid references throughout the chapter graph', () => {
   for (const level of levels) {
@@ -56,5 +96,60 @@ test('gives every chapter one hidden curiosity and a target time', () => {
     );
     assert.equal(Number.isFinite(level.parTime), true, `${level.id} needs a par time`);
     assert.ok(level.parTime > 0, `${level.id} par time must be positive`);
+  }
+});
+
+test('defines valid dynamic rooms with reachable controls', () => {
+  for (const level of levels) {
+    const rotatorIds = new Set((level.rotators || []).map((entry) => entry.id));
+    for (const [id, turn] of Object.entries(level.goal.requires?.rotations || {})) {
+      assert.ok(rotatorIds.has(id), `${level.id} requires missing rotator ${id}`);
+      const rotator = level.rotators.find((entry) => entry.id === id);
+      assert.ok(turn >= 0 && turn < rotator.states, `${level.id} requires invalid turn`);
+    }
+    for (const rotator of level.rotators || []) {
+      const control = (level.switches || []).find(
+        (entry) => entry.action === 'rotate' && entry.target === rotator.id,
+      );
+      assert.ok(control, `${level.id} ${rotator.id} needs a control`);
+      assert.ok(rotator.states >= 2 && rotator.states <= 4);
+      for (let turn = 0; turn < rotator.states; turn += 1) {
+        for (const wall of getRotatorWalls(rotator, turn)) {
+          assert.ok(wall.x >= 0 && wall.y >= 0);
+          assert.ok(wall.x + wall.w <= 360 && wall.y + wall.h <= 640);
+          assert.equal(
+            circleRectCollision({ ...control, radius: control.r }, wall),
+            false,
+            `${level.id} ${rotator.id} traps its control at turn ${turn}`,
+          );
+        }
+      }
+    }
+  }
+});
+
+test('keeps dynamic-room controls and required objectives reachable', () => {
+  for (const level of levels.filter((entry) => entry.rotators?.length)) {
+    for (const control of level.switches.filter((entry) => entry.action === 'rotate')) {
+      assert.equal(canReach(level, {}, control), true, `${level.id} cannot reach ${control.id}`);
+    }
+    const requiredTurns = level.goal.requires.rotations || {};
+    const objectives = [
+      ...(level.items || []),
+      ...level.switches.filter((entry) => entry.action !== 'rotate'),
+      {
+        id: 'goal',
+        x: level.goal.x + level.goal.w / 2,
+        y: level.goal.y + level.goal.h / 2,
+        r: 14,
+      },
+    ];
+    for (const objective of objectives) {
+      assert.equal(
+        canReach(level, requiredTurns, objective),
+        true,
+        `${level.id} cannot reach ${objective.id} in required orientation`,
+      );
+    }
   }
 });

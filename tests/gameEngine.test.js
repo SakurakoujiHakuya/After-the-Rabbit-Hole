@@ -4,8 +4,10 @@ import {
   activateSwitch,
   circleRectCollision,
   getMoverRect,
+  getRotatorWalls,
   makeBall,
   requirementsMet,
+  rotateRect,
   updateBall,
 } from '../src/gameEngine.js';
 
@@ -70,4 +72,32 @@ test('advances and resets an ordered switch puzzle', () => {
   const rose = activateSwitch(sequence, key.switches, key.sequenceIndex, 'rose');
   assert.equal(rose.status, 'complete');
   assert.deepEqual([...rose.switches], sequence);
+});
+
+test('rotates axis-aligned room walls in ninety-degree steps', () => {
+  const horizontal = { x: 60, y: 95, w: 80, h: 10 };
+  const vertical = rotateRect(horizontal, 100, 100, 1);
+  assert.deepEqual(
+    { x: vertical.x, y: vertical.y, w: vertical.w, h: vertical.h },
+    { x: 95, y: 60, w: 10, h: 80 },
+  );
+
+  const walls = getRotatorWalls({
+    id: 'room',
+    centerX: 100,
+    centerY: 100,
+    walls: [horizontal],
+  }, 1);
+  assert.equal(walls[0].rotatorId, 'room');
+  assert.equal(walls[0].w, 10);
+});
+
+test('checks the required dynamic room orientation', () => {
+  const state = {
+    collected: new Set(),
+    switches: new Set(),
+    rotations: new Map([['tea-table', 1]]),
+  };
+  assert.equal(requirementsMet({ rotations: { 'tea-table': 1 } }, state), true);
+  assert.equal(requirementsMet({ rotations: { 'tea-table': 0 } }, state), false);
 });

@@ -47,6 +47,11 @@
       "description": "Original watercolor hidden rabbit cameo collectible sprite"
     },
     {
+      "path": "assets/art/rotating-tea-table.png",
+      "sha256": "efa73b8122cef90b3e9bf1c7fd96d8c4f755a69fe81b70f50789290ec4b26ed4",
+      "description": "Original top-down watercolor rotating tea-table mechanism sprite"
+    },
+    {
       "path": "assets/audio/rabbit-hole-bgm.mp3",
       "sha256": "07fbc52b04d3ba65e6753763a9e19326c332522a7f1ac1135a6bf367bcf6348a",
       "description": "BGM extracted from BV1ZK411B7cv, part 25, 不思議の国"
