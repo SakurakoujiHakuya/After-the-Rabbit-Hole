@@ -11,6 +11,10 @@ import {
   recordDeath,
 } from './progress';
 
+const debugLevelId = import.meta.env.DEV
+  ? new URLSearchParams(window.location.search).get('level')
+  : null;
+
 function emitEvent(name, detail = {}) {
   window.dispatchEvent(new CustomEvent(`rabbit-hole:${name}`, { detail }));
 }
@@ -252,7 +256,7 @@ function Ending({ progress, onChapters, onReplay }) {
 }
 
 export default function App() {
-  const [screen, setScreen] = useState('start');
+  const [screen, setScreen] = useState(debugLevelId ? 'game' : 'start');
   const [showHowTo, setShowHowTo] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [permissionError, setPermissionError] = useState('');
@@ -260,13 +264,14 @@ export default function App() {
   const [musicPlaying, setMusicPlaying] = useState(false);
   const [controlMode, setControlMode] = useState('keyboard');
   const [progress, setProgress] = useState(loadProgress);
-  const [levelId, setLevelId] = useState(() => loadProgress().currentLevelId);
-  const [pendingLevelId, setPendingLevelId] = useState(() => loadProgress().currentLevelId);
+  const [levelId, setLevelId] = useState(() => debugLevelId || loadProgress().currentLevelId);
+  const [pendingLevelId, setPendingLevelId] = useState(() => debugLevelId || loadProgress().currentLevelId);
   const [paused, setPaused] = useState(false);
   const [resetToken, setResetToken] = useState(0);
   const [interlude, setInterlude] = useState(false);
   const [toast, setToast] = useState('');
   const [collected, setCollected] = useState([]);
+  const [activated, setActivated] = useState([]);
   const inputRef = useRef({
     motion: { x: 0, y: 0 },
     keyboard: { x: 0, y: 0 },
@@ -320,6 +325,7 @@ export default function App() {
     setControlMode(mode);
     setLevelId(targetLevelId);
     setCollected([]);
+    setActivated([]);
     setPaused(false);
     setResetToken((value) => value + 1);
     setScreen('game');
@@ -416,6 +422,7 @@ export default function App() {
 
   const restart = () => {
     setCollected([]);
+    setActivated([]);
     setPaused(false);
     setResetToken((value) => value + 1);
     emitEvent('level_restart', { levelId: level.id });
@@ -435,15 +442,29 @@ export default function App() {
     emitEvent('item_collected', { levelId: level.id, itemType: item.type });
   };
 
-  const handleSwitch = () => {
-    setToast('一枚印章亮了起来。');
+  const handleSwitch = (trigger) => {
+    setActivated(trigger.activeIds || []);
+    if (trigger.sequenceStatus === 'reset') {
+      setToast('顺序错了。镜子把所有印章熄灭了。');
+    } else if (trigger.sequenceStatus === 'complete') {
+      setToast('最后一枚印章回应了你。');
+    } else if (trigger.sequenceStatus === 'correct') {
+      setToast(`顺序正确：${trigger.sequenceIndex}/${trigger.sequenceLength}`);
+    } else {
+      setToast('一枚印章亮了起来。');
+    }
     if (navigator.vibrate) navigator.vibrate(25);
   };
 
   const handleDeath = (reason) => {
     const nextProgress = recordDeath(progress, level.id);
     setProgress(nextProgress);
-    setToast(reason === 'card' ? '纸牌卫兵把你送回了玫瑰旁。' : '漩涡把方向揉成了一团。');
+    const messages = {
+      card: '纸牌卫兵把你送回了玫瑰旁。',
+      watch: '怀表追上了你，时间重新开始。',
+      hazard: '漩涡把方向揉成了一团。',
+    };
+    setToast(messages[reason] || messages.hazard);
     if (navigator.vibrate) navigator.vibrate(90);
   };
 
@@ -473,6 +494,7 @@ export default function App() {
     setProgress(nextProgress);
     setLevelId(nextLevelId);
     setCollected([]);
+    setActivated([]);
     setResetToken((value) => value + 1);
   };
 
@@ -558,6 +580,25 @@ export default function App() {
 
         <footer className="game-footer">
           <div className="hint-line"><span>✦</span><p>{level.hint}</p><span>✦</span></div>
+          {level.goal.requires && (
+            <div className="objective-strip" aria-label="当前目标">
+              {(level.goal.requires.items || []).map((id) => (
+                <span key={id} className={collected.some((item) => item.id === id) ? 'done' : ''}>
+                  {collected.some((item) => item.id === id) ? '✓' : '◇'} 道具
+                </span>
+              ))}
+              {(level.goal.requires.switches || []).map((id, index) => (
+                <span key={id} className={activated.includes(id) ? 'done' : ''}>
+                  {activated.includes(id) ? '✓' : level.switchSequence ? index + 1 : '○'} 印章
+                </span>
+              ))}
+              {level.goal.requires.fragments && (
+                <span className={fragmentItems.length >= level.goal.requires.fragments ? 'done' : ''}>
+                  {fragmentItems.length}/{level.goal.requires.fragments} 名字
+                </span>
+              )}
+            </div>
+          )}
           {level.fragments && (
             <div className="fragment-status">
               {level.fragments.map((word) => (

@@ -31,3 +31,18 @@ test('keeps starts, goals, items, switches, and portals outside walls', () => {
     }
   }
 });
+
+test('defines valid ordered switches and orbit hazards', () => {
+  for (const level of levels) {
+    const switchIds = new Set((level.switches || []).map((entry) => entry.id));
+    for (const id of level.switchSequence || []) {
+      assert.ok(switchIds.has(id), `${level.id} sequence references ${id}`);
+    }
+    for (const mover of level.movers || []) {
+      if (mover.path !== 'orbit') continue;
+      for (const key of ['centerX', 'centerY', 'radiusX', 'radiusY', 'speed']) {
+        assert.equal(Number.isFinite(mover[key]), true, `${level.id} ${mover.id} has invalid ${key}`);
+      }
+    }
+  }
+});

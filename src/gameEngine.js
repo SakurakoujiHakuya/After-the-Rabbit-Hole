@@ -82,6 +82,15 @@ export function resetBall(ball, point) {
 }
 
 export function getMoverRect(mover, time) {
+  if (mover.path === 'orbit') {
+    const angle = time * mover.speed + (mover.phase || 0);
+    return {
+      ...mover,
+      angle,
+      x: mover.centerX + Math.cos(angle) * mover.radiusX - mover.w / 2,
+      y: mover.centerY + Math.sin(angle) * mover.radiusY - mover.h / 2,
+    };
+  }
   const offset = Math.sin(time * mover.speed + (mover.phase || 0)) * mover.range;
   return {
     ...mover,
@@ -98,4 +107,25 @@ export function requirementsMet(requirements, state) {
     !requirements.fragments ||
     [...state.collected].filter((id) => id.startsWith('name-')).length >= requirements.fragments;
   return itemReady && switchReady && fragmentReady;
+}
+
+export function activateSwitch(sequence, switches, sequenceIndex, triggerId) {
+  const nextSwitches = new Set(switches);
+  if (!sequence?.length) {
+    nextSwitches.add(triggerId);
+    return { switches: nextSwitches, sequenceIndex, status: 'activated' };
+  }
+
+  if (triggerId !== sequence[sequenceIndex]) {
+    sequence.forEach((id) => nextSwitches.delete(id));
+    return { switches: nextSwitches, sequenceIndex: 0, status: 'reset' };
+  }
+
+  nextSwitches.add(triggerId);
+  const nextIndex = sequenceIndex + 1;
+  return {
+    switches: nextSwitches,
+    sequenceIndex: nextIndex,
+    status: nextIndex === sequence.length ? 'complete' : 'correct',
+  };
 }

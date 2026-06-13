@@ -567,8 +567,9 @@ button {
 
 .canvas-frame {
   position: relative;
-  flex: 1;
+  flex: 0 1 auto;
   width: min(calc((100svh - 176px) * .5625), calc(100vw - 36px), 430px);
+  height: auto;
   min-height: 0;
   aspect-ratio: 360 / 640;
   margin: 0 auto;
@@ -598,7 +599,7 @@ button {
 .game-footer {
   z-index: 2;
   width: min(100%, 430px);
-  min-height: 75px;
+  min-height: 88px;
   margin: 0 auto;
   text-align: center;
 }
@@ -653,6 +654,30 @@ button {
   border-color: rgba(220, 195, 127, .7);
   color: #e0cca0;
   box-shadow: 0 0 10px rgba(212, 182, 106, .15);
+}
+
+.objective-strip {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 7px;
+  overflow: hidden;
+}
+
+.objective-strip span {
+  padding: 3px 6px;
+  border: 1px solid rgba(180, 175, 211, .22);
+  border-radius: 999px;
+  background: rgba(22, 25, 44, .48);
+  color: rgba(224, 219, 236, .48);
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.objective-strip span.done {
+  border-color: rgba(230, 204, 133, .64);
+  color: #f0d999;
+  box-shadow: 0 0 10px rgba(225, 194, 111, .14);
 }
 
 .secondary-start-button,

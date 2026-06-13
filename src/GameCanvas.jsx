@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { assetUrl } from './assets';
 import {
   WORLD,
+  activateSwitch,
   circleRectCollision,
   getMoverRect,
   makeBall,
@@ -232,7 +233,7 @@ function drawSwitch(ctx, item, active, time) {
   ctx.font = `${Math.max(12, item.r)}px serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(item.minRadius ? '⚖' : active ? '✓' : '?', 0, 1 + Math.sin(time / 300));
+  ctx.fillText(item.minRadius ? '⚖' : active ? '✓' : item.symbol || '?', 0, 1 + Math.sin(time / 300));
   ctx.restore();
 }
 
@@ -288,15 +289,24 @@ function drawHazard(ctx, hazard, time) {
   ctx.restore();
 }
 
-function drawMover(ctx, mover, image) {
+function drawMover(ctx, mover, art) {
   ctx.save();
   ctx.translate(mover.x + mover.w / 2, mover.y + mover.h / 2);
-  if (image?.complete) {
+  if (mover.type === 'watch' && art.watch?.complete) {
+    const size = Math.max(38, mover.w * 1.8);
+    ctx.rotate((mover.angle || 0) + Math.PI / 2);
+    ctx.shadowColor = 'rgba(224, 183, 91, .65)';
+    ctx.shadowBlur = 13;
+    ctx.drawImage(art.watch, -size / 2, -size / 2, size, size);
+    ctx.restore();
+    return;
+  }
+  if (art.cardGuard?.complete) {
     const height = Math.max(42, mover.h * 2.7);
     const width = height;
     ctx.shadowColor = 'rgba(80, 26, 43, .58)';
     ctx.shadowBlur = 9;
-    ctx.drawImage(image, -width / 2, -height * 0.62, width, height);
+    ctx.drawImage(art.cardGuard, -width / 2, -height * 0.62, width, height);
     ctx.restore();
     return;
   }
@@ -312,6 +322,55 @@ function drawMover(ctx, mover, image) {
   ctx.textBaseline = 'middle';
   ctx.fillText('♥', 0, 1);
   ctx.restore();
+}
+
+function drawDecoration(ctx, decoration, art, time) {
+  const image = decoration.type === 'mushroom' ? art.mushroom : art.watch;
+  if (!image?.complete) return;
+  ctx.save();
+  ctx.globalAlpha = decoration.alpha ?? 0.5;
+  ctx.translate(decoration.x, decoration.y + Math.sin(time / 900 + decoration.x) * 2);
+  ctx.scale(decoration.flip ? -1 : 1, 1);
+  ctx.drawImage(
+    image,
+    -decoration.size / 2,
+    -decoration.size / 2,
+    decoration.size,
+    decoration.size,
+  );
+  ctx.restore();
+}
+
+function spawnBurst(state, x, y, color, count = 10) {
+  for (let index = 0; index < count; index += 1) {
+    const angle = (Math.PI * 2 * index) / count + Math.random() * 0.3;
+    const speed = 0.35 + Math.random() * 0.75;
+    state.particles.push({
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      color,
+    });
+  }
+}
+
+function drawParticles(ctx, particles, dt) {
+  const frame = Math.min(dt, 32) / 16.667;
+  for (const particle of particles) {
+    particle.x += particle.vx * frame;
+    particle.y += particle.vy * frame;
+    particle.vy += 0.015 * frame;
+    particle.life -= 0.025 * frame;
+    ctx.globalAlpha = Math.max(0, particle.life);
+    ctx.fillStyle = particle.color;
+    ctx.beginPath();
+    ctx.arc(particle.x, particle.y, 1.2 + particle.life * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  return particles.filter((particle) => particle.life > 0);
 }
 
 function drawPlayer(ctx, player, avatar, time, mirrored) {
@@ -389,7 +448,13 @@ export default function GameCanvas({
     const cardGuard = new Image();
     cardGuard.crossOrigin = 'anonymous';
     cardGuard.src = assetUrl('assets/art/card-guard.png');
-    artRef.current = { garden, avatar, teacup, cardGuard };
+    const mushroom = new Image();
+    mushroom.crossOrigin = 'anonymous';
+    mushroom.src = assetUrl('assets/art/mushroom-cluster.png');
+    const watch = new Image();
+    watch.crossOrigin = 'anonymous';
+    watch.src = assetUrl('assets/art/pocket-watch.png');
+    artRef.current = { garden, avatar, teacup, cardGuard, mushroom, watch };
   }, []);
 
   useEffect(() => {
@@ -402,6 +467,10 @@ export default function GameCanvas({
       lockedCooldown: 0,
       portalCooldown: 0,
       deathCooldown: 0,
+      touchingSwitches: new Set(),
+      sequenceIndex: 0,
+      particles: [],
+      shakeUntil: 0,
       startedAt: performance.now(),
     };
   }, [level, resetToken]);
@@ -424,6 +493,8 @@ export default function GameCanvas({
     const die = (state, reason, time) => {
       if (time < state.deathCooldown) return;
       state.deathCooldown = time + 700;
+      state.shakeUntil = time + 260;
+      spawnBurst(state, state.player.x, state.player.y, '#d989a6', 16);
       resetBall(state.player, state.checkpoint);
       callbacksRef.current.onDeath(reason);
     };
@@ -455,22 +526,50 @@ export default function GameCanvas({
           if (item.type === 'potion') state.player.radius = 7;
           if (item.type === 'cookie') state.player.radius = 17;
           if (item.type === 'checkpoint') state.checkpoint = { x: item.x, y: item.y };
+          spawnBurst(state, item.x, item.y, item.type === 'potion' ? '#a9dced' : '#f1d38e', 12);
           callbacksRef.current.onCollect(item);
         }
 
+        const touchingSwitches = new Set(
+          (level.switches || [])
+            .filter((trigger) => overlapsItem(state.player, trigger))
+            .map((trigger) => trigger.id),
+        );
         for (const trigger of level.switches || []) {
-          if (state.switches.has(trigger.id) || !overlapsItem(state.player, trigger)) continue;
+          if (!touchingSwitches.has(trigger.id) || state.touchingSwitches.has(trigger.id)) continue;
           if (trigger.minRadius && state.player.radius < trigger.minRadius) continue;
-          state.switches.add(trigger.id);
-          callbacksRef.current.onSwitch(trigger);
+          if (!level.switchSequence && state.switches.has(trigger.id)) continue;
+          const result = activateSwitch(
+            level.switchSequence,
+            state.switches,
+            state.sequenceIndex,
+            trigger.id,
+          );
+          state.switches = result.switches;
+          state.sequenceIndex = result.sequenceIndex;
+          if (result.status === 'reset') {
+            state.shakeUntil = time + 120;
+          } else {
+            spawnBurst(state, trigger.x, trigger.y, '#f4dc9a', 12);
+          }
+          callbacksRef.current.onSwitch({
+            ...trigger,
+            sequenceStatus: result.status,
+            sequenceIndex: result.sequenceIndex,
+            sequenceLength: level.switchSequence?.length,
+            activeIds: [...state.switches],
+          });
         }
+        state.touchingSwitches = touchingSwitches;
 
         if (time > state.portalCooldown) {
           const portal = (level.portals || []).find((entry) => overlapsItem(state.player, entry));
           if (portal) {
             const target = level.portals.find((entry) => entry.id === portal.pairId);
             if (target) {
+              spawnBurst(state, state.player.x, state.player.y, portal.color, 11);
               resetBall(state.player, target);
+              spawnBurst(state, target.x, target.y, target.color, 11);
               state.portalCooldown = time + 650;
             }
           }
@@ -478,7 +577,7 @@ export default function GameCanvas({
 
         const hazard = (level.hazards || []).find((entry) => overlapsItem(state.player, entry));
         const moverHit = movers.find((entry) => circleRectCollision(state.player, entry));
-        if (hazard || moverHit) die(state, hazard ? 'hazard' : 'card', time);
+        if (hazard || moverHit) die(state, hazard ? 'hazard' : moverHit.type, time);
 
         if (circleRectCollision(state.player, level.goal)) {
           if (requirementsMet(level.goal.requires, state)) {
@@ -493,11 +592,17 @@ export default function GameCanvas({
         }
       }
 
+      ctx.clearRect(0, 0, WORLD.width, WORLD.height);
+      ctx.save();
+      if (state && time < state.shakeUntil) {
+        ctx.translate((Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4);
+      }
       drawPaper(ctx, artRef.current.garden);
       (level.zones || []).forEach((zone) => drawZone(ctx, zone, time));
+      (level.decorations || []).forEach((decoration) => drawDecoration(ctx, decoration, artRef.current, time));
       level.walls.forEach((wall, index) => drawWall(ctx, wall, index));
       activeGates.forEach((gate) => drawGate(ctx, gate, false));
-      movers.forEach((mover) => drawMover(ctx, mover, artRef.current.cardGuard));
+      movers.forEach((mover) => drawMover(ctx, mover, artRef.current));
       (level.hazards || []).forEach((hazard) => drawHazard(ctx, hazard, time));
       (level.portals || []).forEach((portal) => drawPortal(ctx, portal, time, artRef.current.teacup));
 
@@ -509,7 +614,9 @@ export default function GameCanvas({
         }
         const mirrored = (level.zones || []).some((zone) => zone.type === 'mirror' && pointInRect(state.player, zone));
         drawPlayer(ctx, state.player, artRef.current.avatar, time, mirrored);
+        state.particles = drawParticles(ctx, state.particles, dt);
       }
+      ctx.restore();
 
       animationFrame = requestAnimationFrame(frame);
     };

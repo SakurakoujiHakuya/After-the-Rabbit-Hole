@@ -164,6 +164,11 @@ const levelList = [
       { id: 'blue-potion', type: 'potion', x: 286, y: 548, r: 13 },
       { id: 'cake', type: 'cookie', x: 62, y: 155, r: 13 },
     ],
+    decorations: [
+      { type: 'mushroom', x: 190, y: 442, size: 72, alpha: 0.58 },
+      { type: 'mushroom', x: 250, y: 248, size: 62, alpha: 0.5, flip: true },
+      { type: 'mushroom', x: 122, y: 72, size: 54, alpha: 0.46 },
+    ],
     switches: [{ id: 'heavy-cap', x: 290, y: 155, r: 20, minRadius: 16 }],
     walls: [
       ...border,
@@ -196,6 +201,24 @@ const levelList = [
     },
     next: ['queen-garden'],
     items: [{ id: 'watch-hand', type: 'key', x: 60, y: 116, r: 12 }],
+    decorations: [
+      { type: 'watch', x: 180, y: 350, size: 84, alpha: 0.18 },
+      { type: 'watch', x: 286, y: 152, size: 48, alpha: 0.2 },
+    ],
+    movers: [
+      {
+        id: 'minute-hand',
+        type: 'watch',
+        path: 'orbit',
+        centerX: 180,
+        centerY: 350,
+        radiusX: 112,
+        radiusY: 42,
+        w: 25,
+        h: 25,
+        speed: 0.0015,
+      },
+    ],
     portals: [
       { id: 'cup-a1', pairId: 'cup-a2', color: '#9f6c66', x: 286, y: 538, r: 17 },
       { id: 'cup-a2', pairId: 'cup-a1', color: '#9f6c66', x: 75, y: 358, r: 17 },
@@ -257,8 +280,8 @@ const levelList = [
     chapter: '第七章',
     eyebrow: 'VII · 镜中走廊',
     name: '门在你的倒影身后',
-    mechanic: '镜像、水流与传送',
-    hint: '镜面反转左右，银框会把你送到倒影中',
+    mechanic: '镜像、传送与顺序',
+    hint: '按照月亮、钥匙、玫瑰的顺序点亮镜中印章',
     quote: '她向前走了两步，却看见自己从另一边靠近。',
     start: { x: 54, y: 570 },
     goal: {
@@ -266,7 +289,7 @@ const levelList = [
       y: 38,
       w: 43,
       h: 52,
-      requires: { switches: ['mirror-seal'] },
+      requires: { switches: ['moon-seal', 'key-seal', 'rose-seal'] },
     },
     next: ['trial-of-names'],
     zones: [
@@ -277,7 +300,12 @@ const levelList = [
       { id: 'glass-a', pairId: 'glass-b', color: '#a8c9cc', x: 286, y: 280, r: 18 },
       { id: 'glass-b', pairId: 'glass-a', color: '#a8c9cc', x: 74, y: 128, r: 18 },
     ],
-    switches: [{ id: 'mirror-seal', x: 286, y: 110, r: 18 }],
+    switchSequence: ['moon-seal', 'key-seal', 'rose-seal'],
+    switches: [
+      { id: 'moon-seal', symbol: '☾', x: 286, y: 280, r: 18 },
+      { id: 'key-seal', symbol: '⚿', x: 74, y: 128, r: 18 },
+      { id: 'rose-seal', symbol: '✿', x: 286, y: 110, r: 18 },
+    ],
     hazards: [{ id: 'mirror-hole', type: 'whirlpool', x: 180, y: 169, r: 19 }],
     walls: [
       ...border,
@@ -321,6 +349,19 @@ const levelList = [
     movers: [
       { id: 'jury-1', type: 'card', x: 40, y: 402, w: 48, h: 15, axis: 'x', range: 230, speed: 0.0018 },
       { id: 'jury-2', type: 'card', x: 270, y: 222, w: 48, h: 15, axis: 'x', range: -230, speed: 0.0021, phase: 1.6 },
+      {
+        id: 'court-clock',
+        type: 'watch',
+        path: 'orbit',
+        centerX: 180,
+        centerY: 170,
+        radiusX: 94,
+        radiusY: 38,
+        w: 27,
+        h: 27,
+        speed: 0.0018,
+        phase: 0.7,
+      },
     ],
     walls: [
       ...border,

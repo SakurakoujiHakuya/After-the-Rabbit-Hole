@@ -32,6 +32,16 @@
       "description": "Original watercolor playing-card guard sprite"
     },
     {
+      "path": "assets/art/pocket-watch.png",
+      "sha256": "3077e9b14f8911f419a750f40cb96222da4aab426836f7527f9e43375bc6a78f",
+      "description": "Original watercolor enchanted pocket-watch obstacle sprite"
+    },
+    {
+      "path": "assets/art/mushroom-cluster.png",
+      "sha256": "7837c2f3565d049695bca0993cd5e13d4a8b8cb9ab9c3e88775b824513be9af7",
+      "description": "Original watercolor key-marked mushroom landmark sprite"
+    },
+    {
       "path": "assets/audio/rabbit-hole-bgm.mp3",
       "sha256": "07fbc52b04d3ba65e6753763a9e19326c332522a7f1ac1135a6bf367bcf6348a",
       "description": "BGM extracted from BV1ZK411B7cv, part 25, 不思議の国"
