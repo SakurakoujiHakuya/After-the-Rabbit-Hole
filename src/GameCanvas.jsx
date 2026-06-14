@@ -259,6 +259,35 @@ function drawItem(ctx, item, time, art) {
     ctx.beginPath();
     ctx.arc(0, -14, 3, Math.PI, 0);
     ctx.stroke();
+  } else if (item.type === 'fan') {
+    ctx.shadowColor = '#b9d9e8';
+    ctx.fillStyle = '#d7e4e6';
+    ctx.strokeStyle = '#7895a8';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, 12);
+    ctx.quadraticCurveTo(-18, -3, -10, -12);
+    ctx.quadraticCurveTo(0, -18, 10, -12);
+    ctx.quadraticCurveTo(18, -3, 0, 12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    for (const x of [-8, -4, 0, 4, 8]) {
+      ctx.beginPath();
+      ctx.moveTo(0, 11);
+      ctx.lineTo(x, -11);
+      ctx.stroke();
+    }
+  } else if (item.type === 'smile') {
+    ctx.shadowColor = item.color || '#d7b5ef';
+    ctx.shadowBlur = 18 + Math.sin(time / 220) * 3;
+    ctx.strokeStyle = item.color || '#e6c5f4';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(0, -2, 13, 0.18 * Math.PI, 0.82 * Math.PI);
+    ctx.stroke();
+    ctx.fillStyle = '#f3e8cf';
+    for (const x of [-6, 0, 6]) ctx.fillRect(x - 1.4, 7, 2.8, 4);
   } else if (item.type === 'shield') {
     ctx.shadowColor = item.color || '#b9d8ed';
     ctx.fillStyle = 'rgba(180, 210, 232, .3)';
@@ -328,7 +357,7 @@ function drawSwitch(ctx, item, active, time, art) {
   ctx.translate(item.x, item.y);
   ctx.shadowColor = active ? '#f3cf80' : 'transparent';
   ctx.shadowBlur = 15;
-  if (item.action === 'phase' && art.chessPawn?.complete) {
+  if (item.action === 'phase' && item.phaseStyle === 'chess' && art.chessPawn?.complete) {
     const bob = Math.sin(time / 340 + item.x) * 1.2;
     const size = item.r * 2.65;
     ctx.shadowColor = active ? '#edf0dd' : '#9aaad0';
@@ -387,7 +416,7 @@ function drawSwitch(ctx, item, active, time, art) {
   ctx.textBaseline = 'middle';
   const symbol = item.action === 'rotate'
     ? '↻'
-    : item.action === 'phase' ? '♟'
+    : item.action === 'phase' ? item.glyph || '♟'
     : item.minRadius ? '⚖' : active ? '✓' : item.symbol || '?';
   ctx.fillText(symbol, 0, 1 + Math.sin(time / 300));
   ctx.restore();
@@ -973,6 +1002,7 @@ export default function GameCanvas({
         for (const trigger of level.switches || []) {
           if (!touchingSwitches.has(trigger.id) || state.touchingSwitches.has(trigger.id)) continue;
           if (trigger.minRadius && state.player.radius < trigger.minRadius) continue;
+          if (trigger.maxRadius && state.player.radius > trigger.maxRadius) continue;
           if (trigger.action === 'rotate') {
             const rotator = (level.rotators || []).find((entry) => entry.id === trigger.target);
             if (rotator) {

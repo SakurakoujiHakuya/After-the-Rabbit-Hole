@@ -237,6 +237,7 @@ const storyPortraits = {
   card: 'assets/art/card-guard.png',
   queen: 'assets/art/red-queen-portrait.jpg',
   flamingo: 'assets/art/flamingo-mallet.png',
+  cheshire: 'assets/art/cheshire-cat-portrait.png',
 };
 
 function StoryPortrait({ portrait }) {
@@ -583,6 +584,8 @@ export default function App() {
       checkpoint: '红玫瑰记住了你的位置。',
       paint: '爱丽丝提起了红色油漆桶。',
       timepiece: '帽匠借出的怀表停住了巡逻机关。',
+      fan: '白兔的折扇吹开了一条过分狭窄的路。',
+      smile: '微笑留了下来，猫却仍然不见踪影。',
       shield: '支线留下的纪念物正保护着你。',
       curiosity: '你找到了一枚藏起来的兔子浮雕。',
     };
@@ -616,15 +619,15 @@ export default function App() {
     if (trigger.sequenceStatus === 'needs-bumper') {
       setToast(`这道球门只承认 ${trigger.order} 号火烈鸟击出的球。`);
     } else if (trigger.sequenceStatus === 'wrong-phase') {
-      setToast('这枚棋子属于另一种颜色的世界，先切换棋盘。');
+      setToast(trigger.wrongPhaseMessage || '这枚棋子属于另一种颜色的世界，先切换棋盘。');
     } else if (trigger.rotationId) {
       setRotations(trigger.rotations || {});
       setToast(trigger.rotationTurn === 1 ? '房间转过了九十度。' : '房间回到了原来的方向。');
     } else if (trigger.phaseId) {
       setPhases(trigger.phases || {});
       setToast(trigger.phaseState
-        ? '白棋醒来，前方的镜门改变了位置。'
-        : '黑棋醒来，身后的路被镜面封住。');
+        ? trigger.phaseOnMessage || '白棋醒来，前方的镜门改变了位置。'
+        : trigger.phaseOffMessage || '黑棋醒来，身后的路被镜面封住。');
     } else if (trigger.sequenceStatus === 'reset') {
       setToast('顺序错了。镜子把所有印章熄灭了。');
     } else if (trigger.sequenceStatus === 'complete') {
@@ -806,9 +809,9 @@ export default function App() {
               ))}
               {(level.goal.requires?.switches || []).map((id, index) => {
                 const trigger = level.switches?.find((entry) => entry.id === id);
-                const label = trigger?.action === 'hoop'
+                const label = trigger?.label || (trigger?.action === 'hoop'
                   ? '球门'
-                  : trigger?.action === 'phase' ? '棋子' : '印章';
+                  : trigger?.action === 'phase' ? '棋子' : '印章');
                 return (
                   <span key={id} className={activated.includes(id) ? 'done' : ''}>
                     {activated.includes(id) ? '✓' : level.switchSequence ? index + 1 : '○'} {label}
@@ -827,7 +830,7 @@ export default function App() {
               ))}
               {Object.entries(level.goal.requires?.phases || {}).map(([id, phase]) => (
                 <span key={id} className={phases[id] === phase ? 'done' : ''}>
-                  {phases[id] === phase ? '✓' : '♟'} 棋局
+                  {phases[id] === phase ? '✓' : level.phaseSymbol || '♟'} {level.phaseLabel || '棋局'}
                 </span>
               ))}
               {(level.goal.requires?.painted || []).length > 0 && (

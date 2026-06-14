@@ -21,15 +21,29 @@ function validRecord(value) {
 
 function sanitizeProgress(value) {
   if (!value || ![2, 3].includes(value.version)) return { ...initialProgress };
-  const unlocked = [...new Set((value.unlocked || []).filter((id) => levelById[id]))];
+  const completed = validRecord(value.completed);
+  const choices = validRecord(value.choices);
+  const derivedUnlocks = Object.keys(completed).flatMap((id) => {
+    const level = levelById[id];
+    if (!level) return [];
+    const choiceId = choices[id];
+    const chosen = level.choices?.find((choice) => choice.id === choiceId);
+    return chosen ? [chosen.next] : level.next || [];
+  });
+  const unlocked = [
+    ...new Set([
+      ...(value.unlocked || []).filter((id) => levelById[id]),
+      ...derivedUnlocks.filter((id) => levelById[id]),
+    ]),
+  ];
   return {
     ...initialProgress,
     ...value,
     version: 3,
     currentLevelId: levelById[value.currentLevelId] ? value.currentLevelId : firstLevelId,
     unlocked: unlocked.length ? unlocked : [firstLevelId],
-    completed: validRecord(value.completed),
-    choices: validRecord(value.choices),
+    completed,
+    choices,
     bestTimes: validRecord(value.bestTimes),
     deaths: validRecord(value.deaths),
     grades: validRecord(value.grades),

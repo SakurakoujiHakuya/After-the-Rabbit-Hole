@@ -89,3 +89,24 @@ test('migrates a version 2 save without losing chapter progress', () => {
   assert.equal(migrated.completed['hall-of-doors'], true);
   assert.deepEqual(migrated.grades, {});
 });
+
+test('unlocks newly inserted chapters from completed legacy predecessors', () => {
+  memory.set('after-the-rabbit-hole:progress:v3', JSON.stringify({
+    version: 3,
+    currentLevelId: 'trial-of-names',
+    unlocked: ['rabbit-fall', 'hall-of-doors', 'mushroom-forest', 'looking-glass', 'trial-of-names'],
+    completed: {
+      'hall-of-doors': true,
+      'mushroom-forest': true,
+      'looking-glass': true,
+    },
+    choices: {
+      'caterpillar-crossroad': 'mushroom',
+      'queen-garden': 'mirror',
+    },
+  }));
+  const migrated = loadProgress();
+  assert.ok(migrated.unlocked.includes('white-rabbit-house'));
+  assert.ok(migrated.unlocked.includes('cheshire-wood'));
+  assert.ok(migrated.unlocked.includes('card-procession'));
+});

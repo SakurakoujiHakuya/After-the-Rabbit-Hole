@@ -11,7 +11,7 @@ import {
 } from '../src/gameEngine.js';
 import { getPlayableLevel, levels, levelById } from '../src/levels.js';
 
-function canReach(level, turns, target, phaseStates = {}, start = level.start) {
+function canReach(level, turns, target, phaseStates = {}, start = level.start, radius = 13) {
   const step = 4;
   const columns = 90;
   const rows = 160;
@@ -21,7 +21,8 @@ function canReach(level, turns, target, phaseStates = {}, start = level.start) {
   const phaseWalls = (level.phases || []).flatMap((phase) => (
     getPhaseWalls(phase, phaseStates[phase.id] ?? phase.initial ?? 0)
   ));
-  const walls = [...level.walls, ...dynamicWalls, ...phaseWalls];
+  const sizeGates = (level.sizeGates || []).filter((gate) => radius > gate.maxRadius);
+  const walls = [...level.walls, ...dynamicWalls, ...phaseWalls, ...sizeGates];
   const seen = new Uint8Array(columns * rows);
   const queue = [];
   const push = (x, y) => {
@@ -30,7 +31,7 @@ function canReach(level, turns, target, phaseStates = {}, start = level.start) {
     if (column < 0 || column >= columns || row < 0 || row >= rows) return;
     const index = row * columns + column;
     if (seen[index]) return;
-    const player = { x: column * step, y: row * step, radius: 13 };
+    const player = { x: column * step, y: row * step, radius };
     if (walls.some((wall) => circleRectCollision(player, wall))) return;
     seen[index] = 1;
     queue.push([column, row]);
@@ -50,7 +51,7 @@ function canReach(level, turns, target, phaseStates = {}, start = level.start) {
     }
   }
   return queue.some(([column, row]) => (
-    Math.hypot(column * step - target.x, row * step - target.y) <= 13 + (target.r || 12)
+    Math.hypot(column * step - target.x, row * step - target.y) <= radius + (target.r || 12)
   ));
 }
 
@@ -66,6 +67,64 @@ test('uses valid references throughout the chapter graph', () => {
       );
     }
   }
+});
+
+test('builds eleven-chapter playthroughs for every branch combination', () => {
+  for (const earlyChoice of ['mushroom', 'tea']) {
+    for (const lateChoice of ['mirror', 'croquet']) {
+      const choices = {
+        'caterpillar-crossroad': earlyChoice,
+        'queen-garden': lateChoice,
+      };
+      const route = [];
+      let level = levelById['rabbit-fall'];
+      while (level) {
+        route.push(level.id);
+        if (level.ending) break;
+        const choice = level.choices?.find((entry) => entry.id === choices[level.id]);
+        level = levelById[choice?.next || level.next?.[0]];
+      }
+      assert.equal(route.length, 11, `${earlyChoice}/${lateChoice} route has the wrong length`);
+      assert.ok(route.includes('white-rabbit-house'));
+      assert.ok(route.includes('cheshire-wood'));
+      assert.ok(route.includes('card-procession'));
+      assert.equal(route.at(-1), 'trial-of-names');
+    }
+  }
+});
+
+test('keeps the white rabbit size tutorial solvable at each body size', () => {
+  const level = levelById['white-rabbit-house'];
+  const potion = level.items.find((item) => item.id === 'house-potion');
+  const fan = level.items.find((item) => item.id === 'rabbit-fan');
+  const latch = level.switches.find((item) => item.id === 'tiny-latch');
+  const goal = {
+    x: level.goal.x + level.goal.w / 2,
+    y: level.goal.y + level.goal.h / 2,
+    r: 14,
+  };
+  assert.equal(canReach(level, {}, potion), true);
+  assert.equal(canReach(level, {}, fan, {}, potion, 7), true);
+  assert.equal(canReach(level, {}, latch, {}, fan, 7), true);
+  assert.equal(canReach(level, {}, goal, {}, latch, 7), true);
+});
+
+test('keeps the paper-card suit sequence reachable in its required order', () => {
+  const level = levelById['card-procession'];
+  let start = level.start;
+  for (const id of level.switchSequence) {
+    const target = level.switches.find((item) => item.id === id);
+    assert.equal(canReach(level, {}, target, {}, start), true, `cannot reach ${id}`);
+    start = target;
+  }
+  const pass = level.items.find((item) => item.id === 'parade-pass');
+  const goal = {
+    x: level.goal.x + level.goal.w / 2,
+    y: level.goal.y + level.goal.h / 2,
+    r: 14,
+  };
+  assert.equal(canReach(level, {}, pass, {}, start), true);
+  assert.equal(canReach(level, {}, goal, {}, pass), true);
 });
 
 test('builds solvable staged routes through phase-changing maps', () => {
@@ -186,6 +245,25 @@ test('carries branch-specific gifts into the shared finale', () => {
   assert.equal(teaCroquet.sizeGates.length, 0);
 });
 
+test('reuses branch gifts in the new common chapters', () => {
+  const forestMushroom = getPlayableLevel('cheshire-wood', {
+    'caterpillar-crossroad': 'mushroom',
+  });
+  const forestTea = getPlayableLevel('cheshire-wood', {
+    'caterpillar-crossroad': 'tea',
+  });
+  assert.ok(forestMushroom.items.some((item) => item.id === 'forest-mushroom-gift'));
+  assert.ok(forestTea.items.some((item) => item.id === 'forest-watch-gift'));
+
+  const procession = getPlayableLevel('card-procession', {
+    'caterpillar-crossroad': 'tea',
+    'queen-garden': 'mirror',
+  });
+  assert.ok(procession.items.some((item) => item.id === 'procession-watch'));
+  assert.ok(procession.items.some((item) => item.id === 'procession-ribbon'));
+  assert.equal(procession.items.some((item) => item.id === 'procession-feather'), false);
+});
+
 test('adds recovery checkpoints to the late challenge chapters', () => {
   for (const id of ['looking-glass', 'queen-croquet', 'trial-of-names']) {
     const level = levelById[id];
@@ -216,8 +294,15 @@ test('defines reachable Alice-themed paint puzzles', () => {
 test('defines valid ordered switches and orbit hazards', () => {
   for (const level of levels) {
     const switchIds = new Set((level.switches || []).map((entry) => entry.id));
+    const itemIds = new Set((level.items || []).map((entry) => entry.id));
     for (const id of level.switchSequence || []) {
       assert.ok(switchIds.has(id), `${level.id} sequence references ${id}`);
+    }
+    for (const id of level.goal.requires?.switches || []) {
+      assert.ok(switchIds.has(id), `${level.id} goal references missing switch ${id}`);
+    }
+    for (const id of level.goal.requires?.items || []) {
+      assert.ok(itemIds.has(id), `${level.id} goal references missing item ${id}`);
     }
     for (const mover of level.movers || []) {
       if (mover.path !== 'orbit') continue;
