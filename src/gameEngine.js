@@ -23,6 +23,32 @@ export function overlapsItem(ball, item) {
   return dx * dx + dy * dy < (ball.radius + item.r) ** 2;
 }
 
+export function segmentCrossesHoop(from, to, hoop) {
+  const halfSpan = hoop.aperture ?? hoop.r * 0.72;
+  if (hoop.orientation === 'horizontal') {
+    const delta = to.y - from.y;
+    if (!delta || (from.y - hoop.y) * (to.y - hoop.y) > 0) return false;
+    if (hoop.direction && Math.sign(delta) !== hoop.direction) return false;
+    const ratio = (hoop.y - from.y) / delta;
+    const crossingX = from.x + (to.x - from.x) * ratio;
+    return Math.abs(crossingX - hoop.x) <= halfSpan;
+  }
+  const delta = to.x - from.x;
+  if (!delta || (from.x - hoop.x) * (to.x - hoop.x) > 0) return false;
+  if (hoop.direction && Math.sign(delta) !== hoop.direction) return false;
+  const ratio = (hoop.x - from.x) / delta;
+  const crossingY = from.y + (to.y - from.y) * ratio;
+  return Math.abs(crossingY - hoop.y) <= halfSpan;
+}
+
+export function isItemAvailable(item, state) {
+  const phaseReady = Object.entries(item.requiresPhases || {}).every(
+    ([id, phase]) => (state.phases?.get(id) || 0) === phase,
+  );
+  const switchReady = (item.requiresSwitches || []).every((id) => state.switches.has(id));
+  return phaseReady && switchReady;
+}
+
 export function makeBall(start) {
   return {
     x: start.x,

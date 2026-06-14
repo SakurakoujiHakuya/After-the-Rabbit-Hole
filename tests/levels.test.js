@@ -6,10 +6,10 @@ import {
   getPhaseWalls,
   getRotatorWalls,
   makeBall,
-  overlapsItem,
+  segmentCrossesHoop,
   updateBall,
 } from '../src/gameEngine.js';
-import { levels, levelById } from '../src/levels.js';
+import { getPlayableLevel, levels, levelById } from '../src/levels.js';
 
 function canReach(level, turns, target, phaseStates = {}, start = level.start) {
   const step = 4;
@@ -76,29 +76,27 @@ test('builds solvable staged routes through phase-changing maps', () => {
       const phase = level.phases.find((entry) => entry.id === id);
       assert.ok(state >= 0 && state < phase.wallsByState.length);
     }
-    const controls = level.switches.filter((entry) => entry.action === 'phase');
     let start = level.start;
     let state = level.phases[0].initial || 0;
-    for (const control of controls) {
+    for (const step of level.phaseRoute || []) {
+      const target = step.target === 'goal'
+        ? {
+            x: level.goal.x + level.goal.w / 2,
+            y: level.goal.y + level.goal.h / 2,
+            r: 14,
+          }
+        : level.switches.find((entry) => entry.id === step.target)
+          || level.items.find((entry) => entry.id === step.target);
+      assert.ok(target, `${level.id} phase route references ${step.target}`);
+      assert.equal(state, step.phase, `${level.id} reaches ${step.target} in the wrong phase`);
       assert.equal(
-        canReach(level, {}, control, { [control.target]: state }, start),
+        canReach(level, {}, target, { [level.phases[0].id]: state }, start),
         true,
-        `${level.id} cannot reach ${control.id} in phase ${state}`,
+        `${level.id} cannot reach ${step.target} in phase ${state}`,
       );
-      start = control;
-      const phase = level.phases.find((entry) => entry.id === control.target);
-      state = (state + 1) % phase.wallsByState.length;
+      start = target;
+      if (target.action === 'phase') state = target.phaseTo ?? state;
     }
-    const goal = {
-      x: level.goal.x + level.goal.w / 2,
-      y: level.goal.y + level.goal.h / 2,
-      r: 14,
-    };
-    assert.equal(
-      canReach(level, {}, goal, { [level.phases[0].id]: state }, start),
-      true,
-      `${level.id} cannot reach goal after phase sequence`,
-    );
   }
 });
 
@@ -151,8 +149,9 @@ test('defines reachable croquet routes with valid flamingo impulses', () => {
       applyBumperImpulse(launchedBall, bumper);
       let scoredWithoutSteering = false;
       for (let frame = 0; frame < 180 && !scoredWithoutSteering; frame += 1) {
+        const previous = { x: launchedBall.x, y: launchedBall.y };
         updateBall(launchedBall, { x: 0, y: 0 }, level.walls, 16.667);
-        scoredWithoutSteering = overlapsItem(launchedBall, target);
+        scoredWithoutSteering = segmentCrossesHoop(previous, launchedBall, target);
       }
       assert.equal(
         scoredWithoutSteering,
@@ -165,6 +164,35 @@ test('defines reachable croquet routes with valid flamingo impulses', () => {
       assert.ok(bumperIds.has(hoop.requiresBumper));
       assert.equal(canReach(level, {}, hoop), true, `${level.id} cannot reach ${hoop.id}`);
     }
+  }
+});
+
+test('carries branch-specific gifts into the shared finale', () => {
+  const mushroomMirror = getPlayableLevel('trial-of-names', {
+    'caterpillar-crossroad': 'mushroom',
+    'queen-garden': 'mirror',
+  });
+  assert.ok(mushroomMirror.items.some((item) => item.id === 'caterpillar-gift'));
+  assert.ok(mushroomMirror.items.some((item) => item.id === 'mirror-ribbon'));
+  assert.ok(mushroomMirror.sizeGates.some((gate) => gate.id === 'mushroom-shortcut'));
+  assert.equal(mushroomMirror.items.some((item) => item.id === 'tea-watch-gift'), false);
+
+  const teaCroquet = getPlayableLevel('trial-of-names', {
+    'caterpillar-crossroad': 'tea',
+    'queen-garden': 'croquet',
+  });
+  assert.ok(teaCroquet.items.some((item) => item.id === 'tea-watch-gift'));
+  assert.ok(teaCroquet.items.some((item) => item.id === 'flamingo-feather'));
+  assert.equal(teaCroquet.sizeGates.length, 0);
+});
+
+test('adds recovery checkpoints to the late challenge chapters', () => {
+  for (const id of ['looking-glass', 'queen-croquet', 'trial-of-names']) {
+    const level = levelById[id];
+    assert.ok(
+      level.items.some((item) => item.type === 'checkpoint'),
+      `${id} needs a recovery checkpoint`,
+    );
   }
 });
 

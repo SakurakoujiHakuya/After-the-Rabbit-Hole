@@ -149,9 +149,9 @@ const levelList = [
     chapter: '第四章',
     eyebrow: 'IV · 蓝烟岔路',
     name: '你是谁？',
-    mechanic: '镜像与双印章',
+    mechanic: '雾镜与双印章',
     parTime: 70000,
-    hint: '镜面会反转左右，点亮两枚问号印章',
+    hint: '雾镜会扰乱光影，但方向仍由你掌握；点亮两枚问号印章',
     quote: '毛毛虫只问了三个字：“你是谁？” 她却没有答案。',
     story: [
       {
@@ -459,9 +459,9 @@ const levelList = [
     chapter: '第七章 A',
     eyebrow: 'VII-A · 镜中走廊',
     name: '门在你的倒影身后',
-    mechanic: '镜像棋盘与变形地图',
+    mechanic: '黑白棋路与状态钥匙',
     parTime: 105000,
-    hint: '依次唤醒三枚棋子；黑白交替时，镜门会封住旧路并打开新路',
+    hint: '棋子会切换黑白道路；两枚碎片只在各自颜色的世界中现身',
     quote: '她向前走了两步，却看见自己从另一边靠近。',
     story: [
       {
@@ -482,12 +482,39 @@ const levelList = [
       w: 43,
       h: 52,
       requires: {
-        switches: ['glass-pawn-1', 'glass-pawn-2', 'glass-pawn-3'],
+        items: ['black-glass-shard', 'white-glass-shard'],
         phases: { 'mirror-chess': 1 },
       },
     },
     next: ['trial-of-names'],
-    items: [{ id: 'cameo-mirror', type: 'curiosity', x: 180, y: 360, r: 11 }],
+    phaseRoute: [
+      { target: 'glass-white-pawn', phase: 0 },
+      { target: 'glass-queen', phase: 1 },
+      { target: 'black-glass-shard', phase: 0 },
+      { target: 'glass-black-pawn', phase: 0 },
+      { target: 'white-glass-shard', phase: 1 },
+      { target: 'goal', phase: 1 },
+    ],
+    items: [
+      {
+        id: 'black-glass-shard',
+        type: 'key',
+        x: 296,
+        y: 254,
+        r: 12,
+        requiresPhases: { 'mirror-chess': 0 },
+      },
+      {
+        id: 'white-glass-shard',
+        type: 'key',
+        x: 294,
+        y: 132,
+        r: 12,
+        requiresPhases: { 'mirror-chess': 1 },
+      },
+      { id: 'mirror-checkpoint', type: 'checkpoint', x: 180, y: 360, r: 12 },
+      { id: 'cameo-mirror', type: 'curiosity', x: 296, y: 458, r: 11 },
+    ],
     zones: [
       { type: 'mirror', x: 34, y: 326, w: 292, h: 176 },
       { type: 'current', x: 34, y: 128, w: 292, h: 82, forceX: 0, forceY: 0.7 },
@@ -507,11 +534,40 @@ const levelList = [
         ],
       },
     ],
-    switchSequence: ['glass-pawn-1', 'glass-pawn-2', 'glass-pawn-3'],
     switches: [
-      { id: 'glass-pawn-1', action: 'phase', target: 'mirror-chess', x: 300, y: 560, r: 18 },
-      { id: 'glass-pawn-2', action: 'phase', target: 'mirror-chess', x: 60, y: 360, r: 18 },
-      { id: 'glass-pawn-3', action: 'phase', target: 'mirror-chess', x: 60, y: 150, r: 18 },
+      {
+        id: 'glass-white-pawn',
+        action: 'phase',
+        target: 'mirror-chess',
+        phaseTo: 1,
+        requiresPhase: 0,
+        glyph: '♙',
+        x: 300,
+        y: 560,
+        r: 18,
+      },
+      {
+        id: 'glass-queen',
+        action: 'phase',
+        target: 'mirror-chess',
+        phaseTo: 0,
+        requiresPhase: 1,
+        glyph: '♛',
+        x: 60,
+        y: 360,
+        r: 18,
+      },
+      {
+        id: 'glass-black-pawn',
+        action: 'phase',
+        target: 'mirror-chess',
+        phaseTo: 1,
+        requiresPhase: 0,
+        glyph: '♟',
+        x: 60,
+        y: 150,
+        r: 18,
+      },
     ],
     hazards: [{ id: 'mirror-hole', type: 'whirlpool', x: 180, y: 169, r: 19 }],
     walls: [
@@ -583,7 +639,10 @@ const levelList = [
       requires: { switches: ['croquet-hoop-1', 'croquet-hoop-2', 'croquet-hoop-3'] },
     },
     next: ['trial-of-names'],
-    items: [{ id: 'cameo-croquet', type: 'curiosity', x: 52, y: 72, r: 11 }],
+    items: [
+      { id: 'croquet-checkpoint', type: 'checkpoint', x: 58, y: 420, r: 12 },
+      { id: 'cameo-croquet', type: 'curiosity', x: 52, y: 72, r: 11 },
+    ],
     switchSequence: ['croquet-hoop-1', 'croquet-hoop-2', 'croquet-hoop-3'],
     switches: [
       {
@@ -591,6 +650,9 @@ const levelList = [
         action: 'hoop',
         order: 1,
         requiresBumper: 'flamingo-1',
+        orientation: 'vertical',
+        direction: 1,
+        aperture: 17,
         x: 292,
         y: 520,
         r: 20,
@@ -600,6 +662,9 @@ const levelList = [
         action: 'hoop',
         order: 2,
         requiresBumper: 'flamingo-2',
+        orientation: 'vertical',
+        direction: -1,
+        aperture: 17,
         x: 66,
         y: 326,
         r: 20,
@@ -609,6 +674,9 @@ const levelList = [
         action: 'hoop',
         order: 3,
         requiresBumper: 'flamingo-3',
+        orientation: 'vertical',
+        direction: 1,
+        aperture: 17,
         x: 292,
         y: 136,
         r: 20,
@@ -623,6 +691,7 @@ const levelList = [
         r: 18,
         impulseX: 5.4,
         impulseY: -0.74,
+        flightDuration: 1800,
         artSize: 58,
       },
       {
@@ -634,6 +703,7 @@ const levelList = [
         r: 18,
         impulseX: -5.4,
         impulseY: -0.7,
+        flightDuration: 1800,
         artSize: 58,
       },
       {
@@ -645,6 +715,7 @@ const levelList = [
         r: 18,
         impulseX: 5.4,
         impulseY: -0.7,
+        flightDuration: 1800,
         artSize: 58,
       },
     ],
@@ -699,6 +770,26 @@ const levelList = [
         portrait: 'alice',
         text: '我。记得。自己。三个词已经足够让我站在这里。',
       },
+      'collect:caterpillar-gift': {
+        speaker: '毛毛虫的回声',
+        portrait: 'caterpillar',
+        text: '你保留了一小片蘑菇。变小不是退缩，而是看见另一条路。',
+      },
+      'collect:tea-watch-gift': {
+        speaker: '帽匠的回声',
+        portrait: 'hatter',
+        text: '借你七秒钟。时间会停下，纸牌却不会知道自己已经迟到。',
+      },
+      'collect:mirror-ribbon': {
+        speaker: '镜中的红后',
+        portrait: 'queen',
+        text: '这条缎带能替你挡住一次错误的方向。',
+      },
+      'collect:flamingo-feather': {
+        speaker: '火烈鸟',
+        portrait: 'flamingo',
+        text: '把羽毛留着。下一张撞来的纸牌，会先撞上女王自己的规则。',
+      },
     },
     start: { x: 180, y: 572 },
     goal: {
@@ -714,10 +805,44 @@ const levelList = [
     },
     fragments: ['我', '记得', '自己'],
     ending: true,
+    inheritances: [
+      {
+        choiceAt: 'caterpillar-crossroad',
+        choice: 'mushroom',
+        items: [
+          { id: 'caterpillar-gift', type: 'potion', x: 298, y: 568, r: 13 },
+        ],
+        sizeGates: [
+          { id: 'mushroom-shortcut', x: 268, y: 344, w: 74, h: 18, maxRadius: 9 },
+        ],
+      },
+      {
+        choiceAt: 'caterpillar-crossroad',
+        choice: 'tea',
+        items: [
+          { id: 'tea-watch-gift', type: 'timepiece', x: 298, y: 568, r: 13, duration: 7000 },
+        ],
+      },
+      {
+        choiceAt: 'queen-garden',
+        choice: 'mirror',
+        items: [
+          { id: 'mirror-ribbon', type: 'shield', x: 58, y: 488, r: 13, color: '#b9d9ef' },
+        ],
+      },
+      {
+        choiceAt: 'queen-garden',
+        choice: 'croquet',
+        items: [
+          { id: 'flamingo-feather', type: 'shield', x: 58, y: 488, r: 13, color: '#eda6ba' },
+        ],
+      },
+    ],
     items: [
       { id: 'name-1', type: 'fragment', word: '我', x: 54, y: 468, r: 13 },
       { id: 'name-2', type: 'fragment', word: '记得', x: 300, y: 350, r: 13 },
       { id: 'name-3', type: 'fragment', word: '自己', x: 58, y: 206, r: 13 },
+      { id: 'trial-checkpoint', type: 'checkpoint', x: 300, y: 398, r: 12 },
       { id: 'cameo-trial', type: 'curiosity', x: 300, y: 294, r: 11 },
     ],
     switches: [
@@ -782,4 +907,21 @@ export const firstLevelId = levelList[0].id;
 
 export function getLevel(levelId) {
   return levelById[levelId] || levelList[0];
+}
+
+export function getPlayableLevel(levelId, choices = {}) {
+  const level = getLevel(levelId);
+  if (!level.inheritances?.length) return level;
+  const inherited = level.inheritances.filter(
+    (entry) => choices[entry.choiceAt] === entry.choice,
+  );
+  if (!inherited.length) return level;
+  return {
+    ...level,
+    items: [
+      ...(level.items || []),
+      ...inherited.flatMap((entry) => entry.items || []),
+    ],
+    sizeGates: inherited.flatMap((entry) => entry.sizeGates || []),
+  };
 }

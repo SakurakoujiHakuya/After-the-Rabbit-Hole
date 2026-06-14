@@ -449,9 +449,9 @@ button {
   width: 100%;
   min-height: 100svh;
   padding:
-    max(17px, env(safe-area-inset-top))
-    18px
-    max(15px, env(safe-area-inset-bottom));
+    max(8px, env(safe-area-inset-top))
+    8px
+    max(8px, env(safe-area-inset-bottom));
   overflow: hidden;
   background:
     linear-gradient(rgba(22, 28, 48, .58), rgba(12, 15, 28, .82)),
@@ -508,10 +508,10 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: min(100%, 430px);
-  min-height: 61px;
+  width: min(100%, 460px);
+  min-height: 52px;
   margin: 0 auto;
-  padding: 0 7px 8px;
+  padding: 0 4px 5px;
 }
 
 .game-header > div:first-child {
@@ -528,7 +528,7 @@ button {
 .game-header h1 {
   margin: 0;
   color: #e6dcc0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 500;
   letter-spacing: .11em;
 }
@@ -536,8 +536,8 @@ button {
 .mechanic-badge {
   max-width: 110px;
   margin-left: auto;
-  margin-right: 48px;
-  padding: 5px 8px;
+  margin-right: 43px;
+  padding: 4px 7px;
   border: 1px solid rgba(186, 192, 230, .32);
   border-radius: 999px;
   background: rgba(93, 87, 137, .24);
@@ -568,7 +568,7 @@ button {
 .canvas-frame {
   position: relative;
   flex: 0 1 auto;
-  width: min(calc((100svh - 176px) * .5625), calc(100vw - 36px), 430px);
+  width: min(calc((100svh - 124px) * .5625), calc(100vw - 16px), 460px);
   height: auto;
   min-height: 0;
   aspect-ratio: 360 / 640;
@@ -598,8 +598,8 @@ button {
 
 .game-footer {
   z-index: 2;
-  width: min(100%, 430px);
-  min-height: 88px;
+  width: min(100%, 460px);
+  min-height: 56px;
   margin: 0 auto;
   text-align: center;
 }
@@ -608,8 +608,8 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding-top: 10px;
+  gap: 7px;
+  padding-top: 6px;
 }
 
 .hint-line span {
@@ -620,12 +620,12 @@ button {
 .hint-line p {
   margin: 0;
   color: rgba(231, 221, 192, .76);
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: .07em;
 }
 
 .control-label {
-  margin: 6px 0 0;
+  margin: 3px 0 0;
   color: rgba(220, 208, 173, .35);
   font-size: 9px;
   letter-spacing: .12em;
@@ -660,12 +660,12 @@ button {
   display: flex;
   justify-content: center;
   gap: 5px;
-  margin-top: 7px;
+  margin-top: 4px;
   overflow: hidden;
 }
 
 .objective-strip span {
-  padding: 3px 6px;
+  padding: 2px 5px;
   border: 1px solid rgba(180, 175, 211, .22);
   border-radius: 999px;
   background: rgba(22, 25, 44, .48);
@@ -973,7 +973,7 @@ button {
 .toast {
   position: fixed;
   z-index: 15;
-  top: 88px;
+  top: max(70px, calc(env(safe-area-inset-top) + 58px));
   left: 50%;
   width: max-content;
   max-width: calc(100vw - 48px);
@@ -1108,17 +1108,19 @@ button {
 
 .story-beat {
   position: fixed;
-  z-index: 14;
-  right: 18px;
-  bottom: max(104px, calc(env(safe-area-inset-bottom) + 92px));
-  left: 18px;
+  z-index: 31;
+  top: max(7px, env(safe-area-inset-top));
+  right: 108px;
+  bottom: auto;
+  left: 8px;
   display: grid;
-  grid-template-columns: 54px 1fr 20px;
-  gap: 11px;
+  grid-template-columns: 38px 1fr 16px;
+  gap: 8px;
   align-items: center;
   max-width: 430px;
-  margin: auto;
-  padding: 10px 11px;
+  min-height: 48px;
+  margin: 0 auto;
+  padding: 6px 8px;
   border: 1px solid rgba(222, 199, 145, .46);
   border-radius: 5px 16px 5px 16px;
   background:
@@ -1129,8 +1131,8 @@ button {
 }
 
 .story-beat img {
-  width: 54px;
-  height: 54px;
+  width: 38px;
+  height: 38px;
   border: 1px solid rgba(233, 213, 167, .4);
   border-radius: 50%;
   background: rgba(224, 218, 207, .08);
@@ -1143,15 +1145,19 @@ button {
 
 .story-beat strong {
   color: #dabc76;
-  font-size: 9px;
+  font-size: 8px;
   letter-spacing: .15em;
 }
 
 .story-beat p {
-  margin: 4px 0 0;
+  display: -webkit-box;
+  margin: 2px 0 0;
+  overflow: hidden;
   color: #eee4d0;
-  font-size: 11px;
-  line-height: 1.65;
+  font-size: 10px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .story-beat button {
@@ -1160,11 +1166,11 @@ button {
   border: 0;
   background: transparent;
   color: rgba(236, 226, 207, .52);
-  font-size: 18px;
+  font-size: 15px;
 }
 
 @keyframes story-beat-in {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(-8px); }
 }
 
 .quote-card {
@@ -1319,7 +1325,7 @@ button {
   }
 
   .game-footer {
-    min-height: 60px;
+    min-height: 48px;
   }
 
   .hint-line {

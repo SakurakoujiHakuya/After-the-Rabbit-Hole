@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import GameCanvas from './GameCanvas';
 import { assetUrl } from './assets';
-import { firstLevelId, getLevel, levels } from './levels';
+import { firstLevelId, getLevel, getPlayableLevel, levels } from './levels';
 import {
   calculateLevelGrade,
   chooseBranch,
@@ -389,7 +389,10 @@ export default function App() {
   const gravityRef = useRef({ x: 0, y: 0 });
   const keysRef = useRef(new Set());
   const audioRef = useRef(null);
-  const level = getLevel(levelId);
+  const level = useMemo(
+    () => getPlayableLevel(levelId, progress.choices),
+    [levelId, progress.choices],
+  );
 
   const startMusic = useCallback(async () => {
     const audio = audioRef.current;
@@ -579,6 +582,8 @@ export default function App() {
       fragment: `她想起了：“${item.word}”`,
       checkpoint: '红玫瑰记住了你的位置。',
       paint: '爱丽丝提起了红色油漆桶。',
+      timepiece: '帽匠借出的怀表停住了巡逻机关。',
+      shield: '支线留下的纪念物正保护着你。',
       curiosity: '你找到了一枚藏起来的兔子浮雕。',
     };
     setToast(messages[item.type] || '机关发出了一声轻响。');
@@ -610,6 +615,8 @@ export default function App() {
     setActivated(trigger.activeIds || []);
     if (trigger.sequenceStatus === 'needs-bumper') {
       setToast(`这道球门只承认 ${trigger.order} 号火烈鸟击出的球。`);
+    } else if (trigger.sequenceStatus === 'wrong-phase') {
+      setToast('这枚棋子属于另一种颜色的世界，先切换棋盘。');
     } else if (trigger.rotationId) {
       setRotations(trigger.rotations || {});
       setToast(trigger.rotationTurn === 1 ? '房间转过了九十度。' : '房间回到了原来的方向。');
@@ -631,6 +638,13 @@ export default function App() {
     }
     if (trigger.sequenceStatus !== 'needs-bumper') revealStoryEvent(`switch:${trigger.id}`);
     if (navigator.vibrate) navigator.vibrate(25);
+  };
+
+  const handleGiftUsed = (reason) => {
+    setToast(reason === 'card'
+      ? '支线纪念物挡住了纸牌卫兵的一次冲撞。'
+      : '支线纪念物替你挡住了一次危险。');
+    if (navigator.vibrate) navigator.vibrate([25, 30, 25]);
   };
 
   const handleDeath = (reason) => {
@@ -770,6 +784,7 @@ export default function App() {
             onPaint={handlePaint}
             onBumper={handleBumper}
             onSwitch={handleSwitch}
+            onGiftUsed={handleGiftUsed}
             onDeath={handleDeath}
             onLockedDoor={() => setToast(level.lockedHint || '门仍在等待缺少的证据。')}
             onComplete={handleComplete}

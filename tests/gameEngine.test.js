@@ -9,9 +9,11 @@ import {
   getPhaseWalls,
   getRotatorWalls,
   isBumperEnabled,
+  isItemAvailable,
   makeBall,
   requirementsMet,
   rotateRect,
+  segmentCrossesHoop,
   updateBall,
 } from '../src/gameEngine.js';
 
@@ -66,6 +68,31 @@ test('links flamingos to their matching hoop and unlock sequence', () => {
   assert.equal(canScoreLinkedHoop(hoop, 'flamingo-2', 5000, 4500), true);
   assert.equal(canScoreLinkedHoop(hoop, 'flamingo-1', 5000, 4500), false);
   assert.equal(canScoreLinkedHoop(hoop, 'flamingo-2', 4000, 4500), false);
+});
+
+test('scores a hoop only when a launch crosses its opening in the required direction', () => {
+  const hoop = {
+    x: 100,
+    y: 80,
+    r: 20,
+    aperture: 14,
+    orientation: 'vertical',
+    direction: 1,
+  };
+  assert.equal(segmentCrossesHoop({ x: 92, y: 82 }, { x: 108, y: 81 }, hoop), true);
+  assert.equal(segmentCrossesHoop({ x: 108, y: 82 }, { x: 92, y: 81 }, hoop), false);
+  assert.equal(segmentCrossesHoop({ x: 92, y: 110 }, { x: 108, y: 109 }, hoop), false);
+});
+
+test('reveals state-bound items only in their matching chess world', () => {
+  const item = { requiresPhases: { mirror: 1 }, requiresSwitches: ['queen'] };
+  const state = {
+    phases: new Map([['mirror', 1]]),
+    switches: new Set(['queen']),
+  };
+  assert.equal(isItemAvailable(item, state), true);
+  state.phases.set('mirror', 0);
+  assert.equal(isItemAvailable(item, state), false);
 });
 
 test('checks collected items, switches, and name fragments', () => {

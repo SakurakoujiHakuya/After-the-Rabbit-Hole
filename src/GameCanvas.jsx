@@ -10,11 +10,13 @@ import {
   getPhaseWalls,
   getRotatorWalls,
   isBumperEnabled,
+  isItemAvailable,
   makeBall,
   overlapsItem,
   pointInRect,
   requirementsMet,
   resetBall,
+  segmentCrossesHoop,
   updateBall,
 } from './gameEngine';
 
@@ -239,6 +241,39 @@ function drawItem(ctx, item, time, art) {
       ctx.ellipse(0, -11, 5, 8, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
+  } else if (item.type === 'timepiece') {
+    ctx.shadowColor = '#e6c772';
+    ctx.strokeStyle = '#f0d486';
+    ctx.fillStyle = '#695632';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 11, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, -7);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(5, 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, -14, 3, Math.PI, 0);
+    ctx.stroke();
+  } else if (item.type === 'shield') {
+    ctx.shadowColor = item.color || '#b9d8ed';
+    ctx.fillStyle = 'rgba(180, 210, 232, .3)';
+    ctx.strokeStyle = item.color || '#c7e3f1';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -13);
+    ctx.lineTo(11, -7);
+    ctx.lineTo(8, 8);
+    ctx.lineTo(0, 14);
+    ctx.lineTo(-8, 8);
+    ctx.lineTo(-11, -7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
   } else if (item.type === 'curiosity') {
     ctx.shadowColor = '#e7ca78';
     ctx.shadowBlur = 18 + Math.sin(time / 250) * 3;
@@ -300,6 +335,15 @@ function drawSwitch(ctx, item, active, time, art) {
     ctx.shadowBlur = active ? 18 : 10;
     ctx.globalAlpha = active ? 0.72 : 1;
     ctx.drawImage(art.chessPawn, -size / 2, -size / 2 + bob, size, size);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = active ? '#f6e3a7' : '#eef0fb';
+    ctx.strokeStyle = 'rgba(27, 30, 49, .9)';
+    ctx.lineWidth = 3;
+    ctx.font = `bold ${Math.max(14, item.r * 0.95)}px Georgia`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeText(item.glyph || '♟', 0, 2);
+    ctx.fillText(item.glyph || '♟', 0, 2);
     ctx.restore();
     return;
   }
@@ -656,6 +700,7 @@ export default function GameCanvas({
   onPaint,
   onBumper,
   onSwitch,
+  onGiftUsed,
   onDeath,
   onLockedDoor,
   onComplete,
@@ -668,6 +713,7 @@ export default function GameCanvas({
     onPaint,
     onBumper,
     onSwitch,
+    onGiftUsed,
     onDeath,
     onLockedDoor,
     onComplete,
@@ -677,6 +723,7 @@ export default function GameCanvas({
     onPaint,
     onBumper,
     onSwitch,
+    onGiftUsed,
     onDeath,
     onLockedDoor,
     onComplete,
@@ -745,6 +792,11 @@ export default function GameCanvas({
       bumperCooldowns: new Map(),
       lastBumperId: null,
       bumperLinkUntil: 0,
+      bumperFlightUntil: 0,
+      moversFrozenUntil: 0,
+      moversFrozenAt: 0,
+      shields: 0,
+      immunityUntil: 0,
       particles: [],
       shakeUntil: 0,
       startedAt: performance.now(),
@@ -781,7 +833,8 @@ export default function GameCanvas({
       const state = stateRef.current;
       const dt = time - previous;
       previous = time;
-      const movers = (level.movers || []).map((mover) => getMoverRect(mover, time));
+      const moverTime = state && time < state.moversFrozenUntil ? state.moversFrozenAt : time;
+      const movers = (level.movers || []).map((mover) => getMoverRect(mover, moverTime));
       const activeGates = state ? getActiveGates(level, state.switches) : [];
       const rotatorWalls = state
         ? (level.rotators || []).flatMap((rotator) => (
@@ -802,23 +855,33 @@ export default function GameCanvas({
       }
 
       if (state && !paused && !state.complete) {
-        const mirrorZone = (level.zones || []).find((zone) => zone.type === 'mirror' && pointInRect(state.player, zone));
         const currentZones = (level.zones || []).filter((zone) => zone.type === 'current' && pointInRect(state.player, zone));
         const onIce = (level.zones || []).some((zone) => zone.type === 'ice' && pointInRect(state.player, zone));
         const input = gravityRef.current || { x: 0, y: 0 };
+        const bumperFlight = time < state.bumperFlightUntil;
         const gravity = {
-          x: (mirrorZone ? -input.x : input.x) + currentZones.reduce((sum, zone) => sum + (zone.forceX || 0), 0),
-          y: input.y + currentZones.reduce((sum, zone) => sum + (zone.forceY || 0), 0),
+          x: bumperFlight ? 0 : input.x + currentZones.reduce((sum, zone) => sum + (zone.forceX || 0), 0),
+          y: bumperFlight ? 0 : input.y + currentZones.reduce((sum, zone) => sum + (zone.forceY || 0), 0),
         };
+        const previousPosition = { x: state.player.x, y: state.player.y };
+        const sizeGates = (level.sizeGates || []).filter(
+          (gate) => state.player.radius > gate.maxRadius,
+        );
         updateBall(state.player, gravity, [
           ...level.walls,
           ...activeGates,
+          ...sizeGates,
           ...rotatorWalls,
           ...phaseWalls,
         ], dt, {
-          friction: onIce ? 0.996 : 0.982,
-          maxSpeed: onIce ? 5.8 : 4.8,
+          friction: bumperFlight ? 0.998 : onIce ? 0.996 : 0.982,
+          maxSpeed: bumperFlight ? 6.2 : onIce ? 5.8 : 4.8,
         });
+
+        if (state.lastBumperId && time > state.bumperLinkUntil) {
+          state.lastBumperId = null;
+          state.bumperFlightUntil = 0;
+        }
 
         for (const bumper of level.bumpers || []) {
           if (!isBumperEnabled(bumper, state.switches)) continue;
@@ -828,17 +891,62 @@ export default function GameCanvas({
           state.bumperCooldowns.set(bumper.id, time + (bumper.cooldown || 720));
           state.lastBumperId = bumper.id;
           state.bumperLinkUntil = time + (bumper.linkDuration || 3200);
+          state.bumperFlightUntil = time + (bumper.flightDuration || 1500);
           state.shakeUntil = time + 90;
           spawnBurst(state, bumper.x, bumper.y, '#e597aa', 12);
           callbacksRef.current.onBumper?.(bumper);
         }
 
+        for (const trigger of (level.switches || []).filter((entry) => entry.action === 'hoop')) {
+          if (
+            state.switches.has(trigger.id) ||
+            !segmentCrossesHoop(previousPosition, state.player, trigger)
+          ) continue;
+          if (!canScoreLinkedHoop(trigger, state.lastBumperId, state.bumperLinkUntil, time)) {
+            callbacksRef.current.onSwitch({
+              ...trigger,
+              sequenceStatus: 'needs-bumper',
+              activeIds: [...state.switches],
+            });
+            continue;
+          }
+          const result = activateSwitch(
+            level.switchSequence,
+            state.switches,
+            state.sequenceIndex,
+            trigger.id,
+          );
+          state.switches = result.switches;
+          state.sequenceIndex = result.sequenceIndex;
+          state.lastBumperId = null;
+          state.bumperLinkUntil = 0;
+          state.bumperFlightUntil = 0;
+          state.shakeUntil = time + 130;
+          spawnBurst(state, trigger.x, trigger.y, '#f4dc9a', 16);
+          callbacksRef.current.onSwitch({
+            ...trigger,
+            sequenceStatus: result.status,
+            sequenceIndex: result.sequenceIndex,
+            sequenceLength: level.switchSequence?.length,
+            activeIds: [...state.switches],
+          });
+        }
+
         for (const item of level.items || []) {
-          if (state.collected.has(item.id) || !overlapsItem(state.player, item)) continue;
+          if (
+            state.collected.has(item.id) ||
+            !isItemAvailable(item, state) ||
+            !overlapsItem(state.player, item)
+          ) continue;
           state.collected.add(item.id);
           if (item.type === 'potion') state.player.radius = 7;
           if (item.type === 'cookie') state.player.radius = 17;
           if (item.type === 'checkpoint') state.checkpoint = { x: item.x, y: item.y };
+          if (item.type === 'timepiece') {
+            state.moversFrozenAt = time;
+            state.moversFrozenUntil = time + (item.duration || 7000);
+          }
+          if (item.type === 'shield') state.shields += item.charges || 1;
           spawnBurst(state, item.x, item.y, item.type === 'potion' ? '#a9dced' : '#f1d38e', 12);
           callbacksRef.current.onCollect(item);
         }
@@ -859,28 +967,12 @@ export default function GameCanvas({
 
         const touchingSwitches = new Set(
           (level.switches || [])
-            .filter((trigger) => overlapsItem(state.player, trigger))
+            .filter((trigger) => trigger.action !== 'hoop' && overlapsItem(state.player, trigger))
             .map((trigger) => trigger.id),
         );
         for (const trigger of level.switches || []) {
           if (!touchingSwitches.has(trigger.id) || state.touchingSwitches.has(trigger.id)) continue;
           if (trigger.minRadius && state.player.radius < trigger.minRadius) continue;
-          if (
-            trigger.action === 'hoop' &&
-            !canScoreLinkedHoop(
-              trigger,
-              state.lastBumperId,
-              state.bumperLinkUntil,
-              time,
-            )
-          ) {
-            callbacksRef.current.onSwitch({
-              ...trigger,
-              sequenceStatus: 'needs-bumper',
-              activeIds: [...state.switches],
-            });
-            continue;
-          }
           if (trigger.action === 'rotate') {
             const rotator = (level.rotators || []).find((entry) => entry.id === trigger.target);
             if (rotator) {
@@ -900,9 +992,24 @@ export default function GameCanvas({
             continue;
           }
           if (trigger.action === 'phase') {
-            if (state.switches.has(trigger.id)) continue;
+            const phase = (level.phases || []).find((entry) => entry.id === trigger.target);
+            const currentPhase = phase ? state.phases.get(phase.id) || 0 : 0;
+            if (
+              trigger.requiresPhase !== undefined &&
+              currentPhase !== trigger.requiresPhase
+            ) {
+              callbacksRef.current.onSwitch({
+                ...trigger,
+                phaseId: phase?.id,
+                phaseState: currentPhase,
+                sequenceStatus: 'wrong-phase',
+                activeIds: [...state.switches],
+              });
+              continue;
+            }
+            if (state.switches.has(trigger.id) && !trigger.repeatable) continue;
             const result = activateSwitch(
-              level.switchSequence,
+              trigger.repeatable ? null : level.switchSequence,
               state.switches,
               state.sequenceIndex,
               trigger.id,
@@ -912,10 +1019,10 @@ export default function GameCanvas({
             if (result.status === 'reset') {
               state.shakeUntil = time + 120;
             } else {
-              const phase = (level.phases || []).find((entry) => entry.id === trigger.target);
               if (phase) {
-                const currentPhase = state.phases.get(phase.id) || 0;
-                const nextPhase = (currentPhase + 1) % phase.wallsByState.length;
+                const nextPhase = trigger.phaseTo ?? (
+                  (currentPhase + 1) % phase.wallsByState.length
+                );
                 state.phases.set(phase.id, nextPhase);
                 state.shakeUntil = time + 140;
                 spawnBurst(state, trigger.x, trigger.y, nextPhase ? '#d9e7f2' : '#8b789e', 15);
@@ -942,10 +1049,6 @@ export default function GameCanvas({
           );
           state.switches = result.switches;
           state.sequenceIndex = result.sequenceIndex;
-          if (trigger.action === 'hoop' && result.status !== 'reset') {
-            state.lastBumperId = null;
-            state.bumperLinkUntil = 0;
-          }
           if (result.status === 'reset') {
             state.shakeUntil = time + 120;
           } else {
@@ -976,7 +1079,19 @@ export default function GameCanvas({
 
         const hazard = (level.hazards || []).find((entry) => overlapsItem(state.player, entry));
         const moverHit = movers.find((entry) => circleRectCollision(state.player, entry));
-        if (hazard || moverHit) die(state, hazard ? 'hazard' : moverHit.type, time);
+        if ((hazard || moverHit) && time > state.immunityUntil) {
+          if (state.shields > 0) {
+            state.shields -= 1;
+            state.immunityUntil = time + 1500;
+            state.player.vx *= -0.7;
+            state.player.vy *= -0.7;
+            state.shakeUntil = time + 120;
+            spawnBurst(state, state.player.x, state.player.y, '#b9deed', 18);
+            callbacksRef.current.onGiftUsed?.(hazard ? 'hazard' : moverHit.type);
+          } else {
+            die(state, hazard ? 'hazard' : moverHit.type, time);
+          }
+        }
 
         if (circleRectCollision(state.player, level.goal)) {
           if (requirementsMet(level.goal.requires, state)) {
@@ -1004,6 +1119,11 @@ export default function GameCanvas({
       (level.decorations || []).forEach((decoration) => drawDecoration(ctx, decoration, artRef.current, time));
       level.walls.forEach((wall, index) => drawWall(ctx, wall, index));
       activeGates.forEach((gate) => drawGate(ctx, gate, false));
+      if (state) {
+        (level.sizeGates || [])
+          .filter((gate) => state.player.radius > gate.maxRadius)
+          .forEach((gate) => drawGate(ctx, gate, false));
+      }
       phaseWalls.forEach((wall) => drawPhaseWall(ctx, wall, time));
       (level.rotators || []).forEach((rotator) => {
         const turn = state?.rotations.get(rotator.id) || 0;
@@ -1034,7 +1154,9 @@ export default function GameCanvas({
           drawSwitch(ctx, item, active, time, artRef.current);
         });
         for (const item of level.items || []) {
-          if (!state.collected.has(item.id)) drawItem(ctx, item, time, artRef.current);
+          if (!state.collected.has(item.id) && isItemAvailable(item, state)) {
+            drawItem(ctx, item, time, artRef.current);
+          }
         }
         const mirrored = (level.zones || []).some((zone) => zone.type === 'mirror' && pointInRect(state.player, zone));
         drawPlayer(ctx, state.player, artRef.current.avatar, time, mirrored);
