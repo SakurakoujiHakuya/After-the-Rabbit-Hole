@@ -31,6 +31,7 @@ import {
   isTriggerOccupied,
   makeBall,
   requirementsMet,
+  resetBall,
   rotateRect,
   selectFallRespawnPlatform,
   segmentCrossesHoop,
