@@ -499,7 +499,8 @@ test('gives every local mirror zone a playable effect', () => {
   assert.deepEqual(levelById['caterpillar-crossroad'].echoReplay, {
     delay: 2000,
     historyDuration: 2500,
-    holdDuration: 250,
+    captureDuration: 4000,
+    assistRadius: 52,
   });
   assert.ok(
     levelById['cheshire-wood'].zones.every((zone) => zone.effect === 'vanish'),
@@ -515,6 +516,7 @@ test('builds the caterpillar identity puzzle around two source-specific seals', 
     ['echo', 'player'],
   );
   assert.ok(identitySwitches.every((trigger) => trigger.simultaneousGroup === 'identity-pair'));
+  assert.ok(identitySwitches.every((trigger) => trigger.r === 26));
   assert.ok(level.goal.requires.switches.every(
     (id) => identitySwitches.some((trigger) => trigger.id === id),
   ));

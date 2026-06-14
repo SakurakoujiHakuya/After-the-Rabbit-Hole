@@ -50,6 +50,75 @@ export function isSimultaneousGroupOccupied(triggers, player, echoPosition) {
   ));
 }
 
+export function getIdentityCaptureRemaining(capturedUntil, time) {
+  return Math.max(0, (capturedUntil || 0) - time);
+}
+
+export function updateIdentityRelay(
+  state,
+  {
+    time,
+    pastEntered = false,
+    presentOccupied = false,
+    captureDuration = 4000,
+    warningThreshold = 1000,
+  },
+) {
+  let capturedUntil = state?.capturedUntil || 0;
+  let expiringNotified = Boolean(state?.expiringNotified);
+  let event = null;
+
+  if (pastEntered) {
+    capturedUntil = time + captureDuration;
+    expiringNotified = false;
+    event = 'captured';
+  }
+
+  const remaining = getIdentityCaptureRemaining(capturedUntil, time);
+  if (presentOccupied && remaining > 0) {
+    return {
+      status: 'completed',
+      capturedUntil: 0,
+      expiringNotified: false,
+      remaining: 0,
+      event: 'complete',
+    };
+  }
+  if (capturedUntil > 0 && remaining === 0) {
+    return {
+      status: 'idle',
+      capturedUntil: 0,
+      expiringNotified: false,
+      remaining: 0,
+      event: 'expired',
+    };
+  }
+  if (remaining > 0 && remaining <= warningThreshold && !expiringNotified) {
+    expiringNotified = true;
+    event = 'expiring';
+  }
+  return {
+    status: remaining > 0 ? 'captured' : 'idle',
+    capturedUntil,
+    expiringNotified,
+    remaining,
+    event,
+  };
+}
+
+export function getIdentitySealSlowdown(
+  player,
+  seal,
+  assistRadius = 52,
+  minimumScale = 0.42,
+) {
+  if (!player || !seal || assistRadius <= 0) return 1;
+  const distance = Math.hypot(player.x - seal.x, player.y - seal.y);
+  if (distance >= assistRadius) return 1;
+  const influence = 1 - distance / assistRadius;
+  return 1 - influence * (1 - minimumScale);
+}
+
 export function segmentCrossesHoop(from, to, hoop) {
   const halfSpan = hoop.aperture ?? hoop.r * 0.72;
   if (hoop.orientation === 'horizontal') {

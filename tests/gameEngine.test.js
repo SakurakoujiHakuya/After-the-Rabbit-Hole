@@ -12,6 +12,8 @@ import {
   getFallGoalY,
   getFallScrollDistance,
   getEchoReplayPosition,
+  getIdentityCaptureRemaining,
+  getIdentitySealSlowdown,
   getMoverRect,
   getMovingZoneRect,
   getActiveFallPlatforms,
@@ -32,6 +34,7 @@ import {
   segmentCrossesHoop,
   transformControlInput,
   updateMirrorZoneMembership,
+  updateIdentityRelay,
   updateStealthAlert,
   updateBall,
   updateFallPlayer,
@@ -315,7 +318,7 @@ test('interpolates a visible replay from two seconds of position history', () =>
   assert.equal(getEchoReplayPosition(history, 1500, { delay: 2000 }), null);
 });
 
-test('requires the present and replay Alice to occupy their own identity seals', () => {
+test('keeps player and replay Alice bound to their own identity seals', () => {
   const player = { x: 280, y: 320, radius: 13 };
   const echo = { x: 70, y: 320 };
   const triggers = [
@@ -329,6 +332,67 @@ test('requires the present and replay Alice to occupy their own identity seals',
     isSimultaneousGroupOccupied(triggers, player, { x: 280, y: 320 }),
     false,
   );
+});
+
+test('tracks the identity capture window without moving either character', () => {
+  assert.equal(getIdentityCaptureRemaining(5000, 1000), 4000);
+  assert.equal(getIdentityCaptureRemaining(5000, 4999), 1);
+  assert.equal(getIdentityCaptureRemaining(5000, 5000), 0);
+  assert.equal(getIdentityCaptureRemaining(5000, 6000), 0);
+});
+
+test('completes the identity relay only while the captured past is active', () => {
+  const captured = updateIdentityRelay(
+    {},
+    { time: 1000, pastEntered: true, captureDuration: 4000 },
+  );
+  assert.equal(captured.status, 'captured');
+  assert.equal(captured.event, 'captured');
+  assert.equal(captured.capturedUntil, 5000);
+
+  const completed = updateIdentityRelay(
+    captured,
+    { time: 4800, presentOccupied: true, captureDuration: 4000 },
+  );
+  assert.equal(completed.status, 'completed');
+  assert.equal(completed.event, 'complete');
+
+  const expired = updateIdentityRelay(
+    captured,
+    { time: 5000, presentOccupied: true, captureDuration: 4000 },
+  );
+  assert.equal(expired.status, 'idle');
+  assert.equal(expired.event, 'expired');
+});
+
+test('warns once, expires, and allows the past to be captured again', () => {
+  const warning = updateIdentityRelay(
+    { capturedUntil: 5000, expiringNotified: false },
+    { time: 4200 },
+  );
+  assert.equal(warning.event, 'expiring');
+  assert.equal(warning.expiringNotified, true);
+  assert.equal(updateIdentityRelay(warning, { time: 4300 }).event, null);
+
+  const expired = updateIdentityRelay(warning, { time: 5100 });
+  assert.equal(expired.event, 'expired');
+  const recaptured = updateIdentityRelay(
+    expired,
+    { time: 5200, pastEntered: true, captureDuration: 4000 },
+  );
+  assert.equal(recaptured.status, 'captured');
+  assert.equal(recaptured.capturedUntil, 9200);
+});
+
+test('slows Alice smoothly only near the present identity seal', () => {
+  const seal = { x: 100, y: 100 };
+  assert.equal(getIdentitySealSlowdown({ x: 152, y: 100 }, seal, 52), 1);
+  assert.ok(
+    Math.abs(getIdentitySealSlowdown({ x: 100, y: 100 }, seal, 52) - 0.42) <
+    Number.EPSILON,
+  );
+  const halfway = getIdentitySealSlowdown({ x: 126, y: 100 }, seal, 52);
+  assert.ok(halfway > 0.42 && halfway < 1);
 });
 
 test('moves a ping-pong cat fog along configured waypoints and pauses at turns', () => {

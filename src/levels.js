@@ -245,7 +245,7 @@ const levelList = [
     name: '你是谁？',
     mechanic: '过去倒影与身份印章',
     parTime: 80000,
-    hint: '先让过去的你记住左边，再到右边等她',
+    hint: '让过去踩亮左印章，四秒内赶到右边回应她',
     quote: '毛毛虫只问了三个字：“你是谁？” 她却没有答案。',
     story: [
       {
@@ -289,7 +289,8 @@ const levelList = [
     echoReplay: {
       delay: 2000,
       historyDuration: 2500,
-      holdDuration: 250,
+      captureDuration: 4000,
+      assistRadius: 52,
     },
     items: [{ id: 'cameo-crossroad', type: 'curiosity', x: 180, y: 470, r: 11 }],
     switches: [
@@ -302,7 +303,7 @@ const levelList = [
         glyph: '过去',
         x: 72,
         y: 318,
-        r: 20,
+        r: 26,
       },
       {
         id: 'who-right',
@@ -313,7 +314,7 @@ const levelList = [
         glyph: '现在',
         x: 288,
         y: 318,
-        r: 20,
+        r: 26,
       },
     ],
     gates: [{ id: 'question-gate', switchId: 'who-left', switchIds: ['who-left', 'who-right'], x: 142, y: 94, w: 76, h: 16 }],

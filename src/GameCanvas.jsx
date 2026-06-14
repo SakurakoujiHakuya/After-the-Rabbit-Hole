@@ -13,6 +13,8 @@ import {
   getFallGoalY,
   getFallScrollDistance,
   getEchoReplayPosition,
+  getIdentityCaptureRemaining,
+  getIdentitySealSlowdown,
   getMoverRect,
   getMovingZoneRect,
   getActiveFallPlatforms,
@@ -24,7 +26,6 @@ import {
   isItemAvailable,
   isMirrorControlActive,
   isMoverActive,
-  isSimultaneousGroupOccupied,
   isTriggerOccupied,
   makeBall,
   overlapsItem,
@@ -35,6 +36,7 @@ import {
   segmentCrossesHoop,
   transformControlInput,
   updateMirrorZoneMembership,
+  updateIdentityRelay,
   updateBall,
   updateFallPlayer,
   updateStealthAlert,
@@ -542,14 +544,18 @@ function drawSwitch(ctx, item, active, time, art) {
   if (item.triggerSource) {
     const correct = item.occupiedByCorrect;
     const wrong = item.occupiedByWrong;
+    const captured = item.identityStatus === 'captured';
+    const expiring = captured && item.captureProgress <= 0.25;
     ctx.shadowColor = active
       ? '#f3cf80'
+      : captured
+        ? expiring ? '#df7891' : '#9fdced'
       : correct
         ? '#b9d9ef'
         : wrong
           ? '#d77b91'
           : 'rgba(161, 145, 190, .4)';
-    ctx.shadowBlur = active || correct || wrong ? 15 : 7;
+    ctx.shadowBlur = active || captured || correct || wrong ? 15 : 7;
     ctx.fillStyle = active
       ? '#c9a85d'
       : item.triggerSource === 'echo'
@@ -574,6 +580,21 @@ function drawSwitch(ctx, item, active, time, art) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(item.glyph || (item.triggerSource === 'echo' ? '过去' : '现在'), 0, active ? 4 : 1);
+    if (item.triggerSource === 'echo' && captured) {
+      ctx.strokeStyle = expiring ? '#ef8ca4' : '#bceafa';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(
+        0,
+        0,
+        item.r + 7,
+        -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * item.captureProgress,
+      );
+      ctx.stroke();
+      ctx.lineCap = 'butt';
+    }
     ctx.restore();
     return;
   }
@@ -1590,7 +1611,9 @@ function MazeGameCanvas({
       seenMirrorZoneIds: new Set(),
       positionHistory: [],
       echoPosition: null,
-      echoHoldStarted: null,
+      identityCaptureUntil: 0,
+      identityPastOccupied: false,
+      identityExpiringNotified: false,
       zoneActivatedAt: new Map(),
       stealthAlert: 0,
       particles: [],
@@ -1605,7 +1628,9 @@ function MazeGameCanvas({
     if (stateRef.current) {
       stateRef.current.positionHistory = [];
       stateRef.current.echoPosition = null;
-      stateRef.current.echoHoldStarted = null;
+      stateRef.current.identityCaptureUntil = 0;
+      stateRef.current.identityPastOccupied = false;
+      stateRef.current.identityExpiringNotified = false;
     }
   }, [controlMode]);
 
@@ -1632,7 +1657,9 @@ function MazeGameCanvas({
       resetBall(state.player, state.checkpoint);
       state.positionHistory = [];
       state.echoPosition = null;
-      state.echoHoldStarted = null;
+      state.identityCaptureUntil = 0;
+      state.identityPastOccupied = false;
+      state.identityExpiringNotified = false;
       state.stealthAlert = 0;
       state.activeMirrorZoneIds = new Set();
       for (const zone of level.zones || []) {
@@ -1728,6 +1755,16 @@ function MazeGameCanvas({
               currentZones.reduce((sum, zone) => sum + (zone.forceY || 0), 0),
         };
         const previousPosition = { x: state.player.x, y: state.player.y };
+        const presentIdentitySeal = (level.switches || []).find(
+          (trigger) => trigger.simultaneousGroup && trigger.triggerSource === 'player',
+        );
+        const identitySlowdown = level.echoReplay && presentIdentitySeal
+          ? getIdentitySealSlowdown(
+              state.player,
+              presentIdentitySeal,
+              level.echoReplay.assistRadius ?? 52,
+            )
+          : 1;
         const sizeGates = (level.sizeGates || []).filter(
           (gate) => state.player.radius > gate.maxRadius,
         );
@@ -1738,8 +1775,12 @@ function MazeGameCanvas({
           ...rotatorWalls,
           ...phaseWalls,
         ], dt, {
-          friction: bumperFlight ? 0.998 : onIce ? 0.996 : 0.982,
-          maxSpeed: bumperFlight ? 6.2 : onIce ? 5.8 : 4.8,
+          friction: bumperFlight
+            ? 0.998
+            : onIce
+              ? 0.996
+              : 0.9 + 0.082 * identitySlowdown,
+          maxSpeed: (bumperFlight ? 6.2 : onIce ? 5.8 : 4.8) * identitySlowdown,
         });
         if (level.echoReplay) {
           state.positionHistory.push({
@@ -2002,23 +2043,60 @@ function MazeGameCanvas({
         }
         for (const triggers of identityGroups.values()) {
           if (triggers.every((trigger) => state.switches.has(trigger.id))) continue;
-          const occupied = isSimultaneousGroupOccupied(
-            triggers,
-            state.player,
-            state.echoPosition,
+          const pastTrigger = triggers.find((trigger) => trigger.triggerSource === 'echo');
+          const presentTrigger = triggers.find((trigger) => trigger.triggerSource === 'player');
+          const pastOccupied = Boolean(
+            pastTrigger && isTriggerOccupied(pastTrigger, state.player, state.echoPosition),
           );
-          if (!occupied) {
-            state.echoHoldStarted = null;
+          const relay = updateIdentityRelay(
+            {
+              capturedUntil: state.identityCaptureUntil,
+              expiringNotified: state.identityExpiringNotified,
+            },
+            {
+              time,
+              pastEntered: pastOccupied && !state.identityPastOccupied,
+              presentOccupied: Boolean(
+                presentTrigger &&
+                isTriggerOccupied(presentTrigger, state.player, state.echoPosition),
+              ),
+              captureDuration: level.echoReplay?.captureDuration ?? 4000,
+            },
+          );
+          state.identityPastOccupied = pastOccupied;
+          state.identityCaptureUntil = relay.capturedUntil;
+          state.identityExpiringNotified = relay.expiringNotified;
+
+          if (relay.event === 'captured') {
+            spawnBurst(state, pastTrigger.x, pastTrigger.y, '#bceafa', 14);
+            callbacksRef.current.onSwitch({
+              ...pastTrigger,
+              sequenceStatus: 'identity-captured',
+              activeIds: [...state.switches],
+            });
+          }
+          if (relay.event === 'expiring') {
+            callbacksRef.current.onSwitch({
+              ...pastTrigger,
+              sequenceStatus: 'identity-expiring',
+              activeIds: [...state.switches],
+            });
+          }
+          if (relay.event === 'expired') {
+            callbacksRef.current.onSwitch({
+              ...pastTrigger,
+              sequenceStatus: 'identity-expired',
+              activeIds: [...state.switches],
+            });
             continue;
           }
-          if (state.echoHoldStarted === null) state.echoHoldStarted = time;
-          if (time - state.echoHoldStarted < (level.echoReplay?.holdDuration ?? 250)) continue;
+          if (relay.status !== 'completed') continue;
+
           for (const trigger of triggers) state.switches.add(trigger.id);
-          state.echoHoldStarted = null;
           state.shakeUntil = time + 140;
           spawnBurst(state, state.player.x, state.player.y, '#c8e4f2', 18);
           callbacksRef.current.onSwitch({
-            ...triggers[0],
+            ...presentTrigger,
             sequenceStatus: 'identity-complete',
             activeIds: [...state.switches],
           });
@@ -2160,6 +2238,15 @@ function MazeGameCanvas({
                     item,
                   ))
                 : false,
+            identityStatus: state.switches.has(item.id)
+              ? 'completed'
+              : getIdentityCaptureRemaining(state.identityCaptureUntil, time) > 0
+                ? 'captured'
+                : 'idle',
+            captureProgress: level.echoReplay?.captureDuration
+              ? getIdentityCaptureRemaining(state.identityCaptureUntil, time) /
+                level.echoReplay.captureDuration
+              : 0,
           }, active, time, artRef.current);
         });
         for (const item of level.items || []) {

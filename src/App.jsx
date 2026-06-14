@@ -71,6 +71,30 @@ function playMirrorZoneCue(effect) {
   oscillator.addEventListener('ended', () => context.close());
 }
 
+function playIdentityCue(status) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+  const context = new AudioContextClass();
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  const frequencies = {
+    'identity-captured': [392, 523],
+    'identity-expiring': [330, 262],
+    'identity-complete': [523, 784],
+  };
+  const [startFrequency, endFrequency] = frequencies[status] || [330, 330];
+  oscillator.type = status === 'identity-expiring' ? 'triangle' : 'sine';
+  oscillator.frequency.setValueAtTime(startFrequency, context.currentTime);
+  oscillator.frequency.exponentialRampToValueAtTime(endFrequency, context.currentTime + 0.22);
+  gain.gain.setValueAtTime(0.0001, context.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.3);
+  oscillator.connect(gain).connect(context.destination);
+  oscillator.start();
+  oscillator.stop(context.currentTime + 0.32);
+  oscillator.addEventListener('ended', () => context.close());
+}
+
 function StartScreen({ progress, onContinue, onNewGame, onChapters, onHowTo }) {
   const hasProgress = progress.unlocked.length > 1 || Object.keys(progress.completed).length > 0;
   const currentLevel = getLevel(progress.currentLevelId);
@@ -653,8 +677,14 @@ export default function App() {
       setToast(trigger.id === 'sun-lantern'
         ? '太阳灯在等月光里的半张微笑。'
         : '出口月灯在等阳光里的另一半微笑。');
+    } else if (trigger.sequenceStatus === 'identity-captured') {
+      setToast('过去被印章记住了。她会在这里等你四秒。');
+    } else if (trigger.sequenceStatus === 'identity-expiring') {
+      setToast('过去的影子快要消失了。');
+    } else if (trigger.sequenceStatus === 'identity-expired') {
+      setToast('这段记忆散去了。让过去的你再经过一次印章。');
     } else if (trigger.sequenceStatus === 'identity-complete') {
-      setToast('过去与现在同时回答了“我”。身份之门终于承认了她。');
+      setToast('过去等到了现在。身份之门终于承认了她。');
     } else if (trigger.stealthStage) {
       setToast(
         trigger.id === 'moon-lantern'
@@ -687,8 +717,21 @@ export default function App() {
     } else {
       setToast('一枚印章亮了起来。');
     }
-    if (trigger.sequenceStatus !== 'needs-bumper') revealStoryEvent(`switch:${trigger.id}`);
-    if (navigator.vibrate) navigator.vibrate(25);
+    if (
+      trigger.sequenceStatus !== 'needs-bumper' &&
+      !['identity-expiring', 'identity-expired'].includes(trigger.sequenceStatus)
+    ) revealStoryEvent(`switch:${trigger.id}`);
+    if (
+      !musicMuted &&
+      ['identity-captured', 'identity-expiring', 'identity-complete'].includes(
+        trigger.sequenceStatus,
+      )
+    ) {
+      playIdentityCue(trigger.sequenceStatus);
+    }
+    if (navigator.vibrate) {
+      navigator.vibrate(trigger.sequenceStatus === 'identity-expiring' ? [12, 35, 12] : 25);
+    }
   };
 
   const handleGiftUsed = (reason) => {
