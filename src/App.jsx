@@ -586,6 +586,9 @@ export default function App() {
       timepiece: '帽匠借出的怀表停住了巡逻机关。',
       fan: '白兔的折扇吹开了一条过分狭窄的路。',
       smile: '微笑留了下来，猫却仍然不见踪影。',
+      mirrorShard: item.releasesMirror
+        ? '定向镜片归位了。左与右终于重新同意彼此。'
+        : '一枚倒影碎片从镜层里脱落下来。',
       shield: '支线留下的纪念物正保护着你。',
       curiosity: '你找到了一枚藏起来的兔子浮雕。',
     };
@@ -625,9 +628,12 @@ export default function App() {
       setToast(trigger.rotationTurn === 1 ? '房间转过了九十度。' : '房间回到了原来的方向。');
     } else if (trigger.phaseId) {
       setPhases(trigger.phases || {});
-      setToast(trigger.phaseState
-        ? trigger.phaseOnMessage || '白棋醒来，前方的镜门改变了位置。'
-        : trigger.phaseOffMessage || '黑棋醒来，身后的路被镜面封住。');
+      setToast(
+        trigger.phaseMessages?.[trigger.phaseState] ||
+        (trigger.phaseState
+          ? trigger.phaseOnMessage || '白棋醒来，前方的镜门改变了位置。'
+          : trigger.phaseOffMessage || '黑棋醒来，身后的路被镜面封住。'),
+      );
     } else if (trigger.sequenceStatus === 'reset') {
       setToast('顺序错了。镜子把所有印章熄灭了。');
     } else if (trigger.sequenceStatus === 'complete') {
@@ -804,7 +810,9 @@ export default function App() {
             <div className="objective-strip" aria-label="当前目标">
               {(level.goal.requires?.items || []).map((id) => (
                 <span key={id} className={collected.some((item) => item.id === id) ? 'done' : ''}>
-                  {collected.some((item) => item.id === id) ? '✓' : '◇'} 道具
+                  {collected.some((item) => item.id === id) ? '✓' : '◇'} {
+                    level.items?.find((item) => item.id === id)?.label || '道具'
+                  }
                 </span>
               ))}
               {(level.goal.requires?.switches || []).map((id, index) => {
@@ -828,11 +836,19 @@ export default function App() {
                   {rotations[id] === turn ? '✓' : '↻'} 房间
                 </span>
               ))}
-              {Object.entries(level.goal.requires?.phases || {}).map(([id, phase]) => (
-                <span key={id} className={phases[id] === phase ? 'done' : ''}>
-                  {phases[id] === phase ? '✓' : level.phaseSymbol || '♟'} {level.phaseLabel || '棋局'}
-                </span>
-              ))}
+              {Object.entries(level.goal.requires?.phases || {}).map(([id, phase]) => {
+                const currentPhase =
+                  phases[id] ??
+                  level.phases?.find((entry) => entry.id === id)?.initial ??
+                  0;
+                return (
+                  <span key={id} className={currentPhase === phase ? 'done' : ''}>
+                    {currentPhase === phase ? '✓' : level.phaseSymbol || '♟'} {
+                      level.phaseLabel || '棋局'
+                    }
+                  </span>
+                );
+              })}
               {(level.goal.requires?.painted || []).length > 0 && (
                 <span className={painted.length >= level.goal.requires.painted.length ? 'done' : ''}>
                   {painted.length}/{level.goal.requires.painted.length} 玫瑰

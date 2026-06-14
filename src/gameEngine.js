@@ -49,6 +49,18 @@ export function isItemAvailable(item, state) {
   return phaseReady && switchReady;
 }
 
+export function isMirrorControlActive(config, state) {
+  if (!config?.invertX) return false;
+  return !config.releaseItem || !state.collected?.has(config.releaseItem);
+}
+
+export function transformControlInput(input, mirrorConfig, state) {
+  return {
+    ...input,
+    x: input.x * (isMirrorControlActive(mirrorConfig, state) ? -1 : 1),
+  };
+}
+
 export function makeBall(start) {
   return {
     x: start.x,

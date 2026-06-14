@@ -11,12 +11,14 @@ import {
   getRotatorWalls,
   isBumperEnabled,
   isItemAvailable,
+  isMirrorControlActive,
   makeBall,
   overlapsItem,
   pointInRect,
   requirementsMet,
   resetBall,
   segmentCrossesHoop,
+  transformControlInput,
   updateBall,
 } from './gameEngine';
 
@@ -96,6 +98,32 @@ function drawZone(ctx, zone, time) {
     ctx.lineTo(zone.x + zone.w - 12, zone.y + 12);
     ctx.stroke();
   }
+  ctx.restore();
+}
+
+function drawMirrorVeil(ctx, time) {
+  ctx.save();
+  const pulse = 0.12 + Math.sin(time / 260) * 0.025;
+  const gradient = ctx.createLinearGradient(0, 0, WORLD.width, WORLD.height);
+  gradient.addColorStop(0, `rgba(171, 206, 232, ${pulse})`);
+  gradient.addColorStop(0.5, 'rgba(107, 82, 148, .035)');
+  gradient.addColorStop(1, `rgba(223, 190, 235, ${pulse})`);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, WORLD.width, WORLD.height);
+  ctx.strokeStyle = 'rgba(221, 229, 247, .28)';
+  ctx.lineWidth = 1.2;
+  for (let y = 54; y < WORLD.height; y += 72) {
+    const wave = Math.sin(time / 420 + y) * 5;
+    ctx.beginPath();
+    ctx.moveTo(18, y);
+    ctx.bezierCurveTo(105, y + wave, 255, y - wave, 342, y);
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(235, 226, 247, .6)';
+  ctx.font = '18px Georgia';
+  ctx.textAlign = 'center';
+  ctx.fillText('‹', 28, 42);
+  ctx.fillText('›', WORLD.width - 28, 42);
   ctx.restore();
 }
 
@@ -288,6 +316,29 @@ function drawItem(ctx, item, time, art) {
     ctx.stroke();
     ctx.fillStyle = '#f3e8cf';
     for (const x of [-6, 0, 6]) ctx.fillRect(x - 1.4, 7, 2.8, 4);
+  } else if (item.type === 'mirrorShard') {
+    ctx.shadowColor = item.color || '#b8dded';
+    ctx.shadowBlur = 20 + Math.sin(time / 220) * 3;
+    const gradient = ctx.createLinearGradient(-12, -14, 12, 14);
+    gradient.addColorStop(0, '#f0f5f1');
+    gradient.addColorStop(0.48, item.color || '#9fcce2');
+    gradient.addColorStop(1, '#756b9c');
+    ctx.fillStyle = gradient;
+    ctx.strokeStyle = '#e9e3f0';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-5, -15);
+    ctx.lineTo(11, -7);
+    ctx.lineTo(7, 13);
+    ctx.lineTo(-12, 7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 255, 255, .66)';
+    ctx.beginPath();
+    ctx.moveTo(-4, -10);
+    ctx.lineTo(5, 8);
+    ctx.stroke();
   } else if (item.type === 'shield') {
     ctx.shadowColor = item.color || '#b9d8ed';
     ctx.fillStyle = 'rgba(180, 210, 232, .3)';
@@ -416,7 +467,8 @@ function drawSwitch(ctx, item, active, time, art) {
   ctx.textBaseline = 'middle';
   const symbol = item.action === 'rotate'
     ? '↻'
-    : item.action === 'phase' ? item.glyph || '♟'
+    : item.action === 'phase'
+      ? item.phaseGlyphs?.[item.currentPhase] || item.glyph || '♟'
     : item.minRadius ? '⚖' : active ? '✓' : item.symbol || '?';
   ctx.fillText(symbol, 0, 1 + Math.sin(time / 300));
   ctx.restore();
@@ -888,9 +940,16 @@ export default function GameCanvas({
         const onIce = (level.zones || []).some((zone) => zone.type === 'ice' && pointInRect(state.player, zone));
         const input = gravityRef.current || { x: 0, y: 0 };
         const bumperFlight = time < state.bumperFlightUntil;
+        const transformedInput = transformControlInput(input, level.mirrorControls, state);
         const gravity = {
-          x: bumperFlight ? 0 : input.x + currentZones.reduce((sum, zone) => sum + (zone.forceX || 0), 0),
-          y: bumperFlight ? 0 : input.y + currentZones.reduce((sum, zone) => sum + (zone.forceY || 0), 0),
+          x: bumperFlight
+            ? 0
+            : transformedInput.x +
+              currentZones.reduce((sum, zone) => sum + (zone.forceX || 0), 0),
+          y: bumperFlight
+            ? 0
+            : transformedInput.y +
+              currentZones.reduce((sum, zone) => sum + (zone.forceY || 0), 0),
         };
         const previousPosition = { x: state.player.x, y: state.player.y };
         const sizeGates = (level.sizeGates || []).filter(
@@ -1145,6 +1204,9 @@ export default function GameCanvas({
         ctx.translate((Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4);
       }
       drawPaper(ctx, artRef.current.garden);
+      if (state && isMirrorControlActive(level.mirrorControls, state)) {
+        drawMirrorVeil(ctx, time);
+      }
       (level.zones || []).forEach((zone) => drawZone(ctx, zone, time));
       (level.decorations || []).forEach((decoration) => drawDecoration(ctx, decoration, artRef.current, time));
       level.walls.forEach((wall, index) => drawWall(ctx, wall, index));
@@ -1180,15 +1242,24 @@ export default function GameCanvas({
         (level.switches || []).forEach((item) => {
           const active = item.action === 'rotate'
             ? (state.rotations.get(item.target) || 0) > 0
-            : state.switches.has(item.id);
-          drawSwitch(ctx, item, active, time, artRef.current);
+            : item.action === 'phase' && item.repeatable
+              ? false
+              : state.switches.has(item.id);
+          drawSwitch(ctx, {
+            ...item,
+            currentPhase: item.action === 'phase'
+              ? state.phases.get(item.target) || 0
+              : undefined,
+          }, active, time, artRef.current);
         });
         for (const item of level.items || []) {
           if (!state.collected.has(item.id) && isItemAvailable(item, state)) {
             drawItem(ctx, item, time, artRef.current);
           }
         }
-        const mirrored = (level.zones || []).some((zone) => zone.type === 'mirror' && pointInRect(state.player, zone));
+        const mirrored =
+          isMirrorControlActive(level.mirrorControls, state) ||
+          (level.zones || []).some((zone) => zone.type === 'mirror' && pointInRect(state.player, zone));
         drawPlayer(ctx, state.player, artRef.current.avatar, time, mirrored);
         state.particles = drawParticles(ctx, state.particles, dt);
       }

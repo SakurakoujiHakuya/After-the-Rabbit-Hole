@@ -10,10 +10,12 @@ import {
   getRotatorWalls,
   isBumperEnabled,
   isItemAvailable,
+  isMirrorControlActive,
   makeBall,
   requirementsMet,
   rotateRect,
   segmentCrossesHoop,
+  transformControlInput,
   updateBall,
 } from '../src/gameEngine.js';
 
@@ -93,6 +95,23 @@ test('reveals state-bound items only in their matching chess world', () => {
   assert.equal(isItemAvailable(item, state), true);
   state.phases.set('mirror', 0);
   assert.equal(isItemAvailable(item, state), false);
+});
+
+test('keeps global mirror controls active until the orientation lens is collected', () => {
+  const config = { invertX: true, releaseItem: 'orientation-lens' };
+  const state = { collected: new Set() };
+  assert.equal(isMirrorControlActive(config, state), true);
+  assert.deepEqual(
+    transformControlInput({ x: 1, y: -0.5 }, config, state),
+    { x: -1, y: -0.5 },
+  );
+  state.collected.add('orientation-lens');
+  assert.equal(isMirrorControlActive(config, state), false);
+  assert.deepEqual(
+    transformControlInput({ x: 1, y: -0.5 }, config, state),
+    { x: 1, y: -0.5 },
+  );
+  assert.equal(isMirrorControlActive(null, state), false);
 });
 
 test('checks collected items, switches, and name fragments', () => {

@@ -154,9 +154,27 @@ test('builds solvable staged routes through phase-changing maps', () => {
         `${level.id} cannot reach ${step.target} in phase ${state}`,
       );
       start = target;
-      if (target.action === 'phase') state = target.phaseTo ?? state;
+      if (target.action === 'phase') {
+        const phase = level.phases.find((entry) => entry.id === target.target);
+        state = target.phaseTo ?? ((state + 1) % phase.wallsByState.length);
+      }
     }
   }
+});
+
+test('turns the looking-glass chapter into a reversible global mirror puzzle', () => {
+  const level = levelById['looking-glass'];
+  assert.deepEqual(level.mirrorControls, {
+    invertX: true,
+    releaseItem: 'orientation-lens',
+  });
+  assert.equal(level.zones?.some((zone) => zone.type === 'mirror') || false, false);
+  const lens = level.items.find((item) => item.id === level.mirrorControls.releaseItem);
+  assert.ok(lens?.releasesMirror);
+  assert.ok(level.goal.requires.items.includes(lens.id));
+  assert.equal(canReach(level, {}, lens), true);
+  assert.deepEqual(level.goal.requires.phases, { 'mirror-depth': 0 });
+  assert.equal(level.phases[0].wallsByState.length, 3);
 });
 
 test('keeps starts, goals, items, switches, and portals outside walls', () => {
