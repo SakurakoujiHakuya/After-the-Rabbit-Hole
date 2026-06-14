@@ -371,6 +371,69 @@ export function makeSeededRandom(seed = 1) {
   };
 }
 
+export function getFallScrollDistance(
+  elapsedMs,
+  durationMs,
+  targetDistance,
+) {
+  const progress = Math.max(0, Math.min(1, elapsedMs / durationMs));
+  const easedProgress = progress * 0.55 + progress * progress * 0.45;
+  return targetDistance * easedProgress;
+}
+
+export function getFallGoalY(
+  elapsedMs,
+  durationMs,
+  viewportHeight = WORLD.height,
+) {
+  const leadMs = 5000;
+  if (elapsedMs < durationMs - leadMs) return viewportHeight + 80;
+  const progress = Math.max(
+    0,
+    Math.min(1, (elapsedMs - (durationMs - leadMs)) / leadMs),
+  );
+  return viewportHeight + 10 - progress * 150;
+}
+
+export function getFallElapsed(
+  time,
+  startedAt,
+  pausedDuration = 0,
+  pauseBeganAt = null,
+) {
+  const activePause = pauseBeganAt === null ? 0 : time - pauseBeganAt;
+  return Math.max(0, time - startedAt - pausedDuration - activePause);
+}
+
+export function selectFallRespawnPlatform(
+  platforms,
+  player,
+  options = {},
+) {
+  const topDangerY = options.topDangerY ?? 70;
+  const viewportHeight = options.viewportHeight ?? WORLD.height;
+  const centerY = options.centerY ?? viewportHeight * 0.46;
+  const excludedIds = options.excludedIds ?? new Set();
+  const safe = (platforms || []).filter((platform) => (
+    platform.type === 'solid' &&
+    platform.route &&
+    !excludedIds.has(platform.id) &&
+    platform.y > topDangerY + player.radius + 22 &&
+    platform.y < viewportHeight - 44
+  ));
+  const distanceToPlayer = (platform) => Math.hypot(
+    platform.x + platform.w / 2 - player.x,
+    platform.y - player.y,
+  );
+  const above = safe
+    .filter((platform) => platform.y < player.y - player.radius)
+    .sort((left, right) => distanceToPlayer(left) - distanceToPlayer(right));
+  if (above.length) return above[0];
+  return safe.sort((left, right) => (
+    Math.abs(left.y - centerY) - Math.abs(right.y - centerY)
+  ))[0] || null;
+}
+
 export function generateFallCourse(config = {}, seed = 1) {
   const random = makeSeededRandom(seed);
   const targetDistance = config.targetDistance ?? 2400;
@@ -406,7 +469,7 @@ export function generateFallCourse(config = {}, seed = 1) {
       x: Math.round(routeCenter - width / 2),
       y: Math.round(courseY),
       w: width,
-      h: type === 'checkpoint' ? 16 : 14,
+      h: 14,
     };
     platforms.push(platform);
     return platform;
@@ -416,7 +479,7 @@ export function generateFallCourse(config = {}, seed = 1) {
   while (courseY < targetDistance) {
     row += 1;
     courseY += randomBetween(rowGapMin, rowGapMax);
-    const route = addRoutePlatform(row % 7 === 0 ? 'checkpoint' : 'solid');
+    const route = addRoutePlatform('solid');
 
     if (random() < 0.72) {
       const bonusWidth = Math.round(randomBetween(72, 102));
@@ -444,9 +507,9 @@ export function generateFallCourse(config = {}, seed = 1) {
   }
 
   row += 1;
-  courseY = targetDistance + 260;
+  courseY = targetDistance + 180;
   const goal = addRoutePlatform('goal');
-  goal.w = Math.max(goal.w, 144);
+  goal.w = Math.max(goal.w, 190);
   goal.x = Math.round(Math.max(sideMargin, Math.min(
     WORLD.width - sideMargin - goal.w,
     routeCenter - goal.w / 2,

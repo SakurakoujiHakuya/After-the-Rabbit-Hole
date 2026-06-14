@@ -15,7 +15,7 @@ const levelList = [
     mechanic: '左右移动与落点',
     mode: 'fall',
     worldHeight: 2400,
-    parTime: 60000,
+    parTime: 30000,
     hint: '世界会不断上升；只能控制左右，别被推到洞顶的尖刺',
     quote: '她追着一只迟到的白影，掉进了一个没有方向的地方。',
     story: [
@@ -41,6 +41,7 @@ const levelList = [
       maxHorizontalSpeed: 4.5,
       maxFallSpeed: 7.2,
       respawnImmunity: 1200,
+      durationMs: 30000,
       targetDistance: 2400,
       startY: 220,
       rowGapMin: 112,
@@ -48,8 +49,6 @@ const levelList = [
       routeWidthMin: 112,
       routeWidthMax: 152,
       maxRouteShift: 104,
-      scrollSpeed: 0.62,
-      maxScrollSpeed: 1.02,
       topDangerY: 70,
     },
     items: [

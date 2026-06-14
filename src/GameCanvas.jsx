@@ -9,6 +9,9 @@ import {
   canScoreLinkedHoop,
   circleRectCollision,
   generateFallCourse,
+  getFallElapsed,
+  getFallGoalY,
+  getFallScrollDistance,
   getEchoReplayPosition,
   getMoverRect,
   getMovingZoneRect,
@@ -28,6 +31,7 @@ import {
   pointInRect,
   requirementsMet,
   resetBall,
+  selectFallRespawnPlatform,
   segmentCrossesHoop,
   transformControlInput,
   updateMirrorZoneMembership,
@@ -1034,7 +1038,6 @@ function drawStealthHud(ctx, alert, hidden) {
 function drawFallPlatform(ctx, platform, breakingAt, time) {
   ctx.save();
   const fragile = platform.type === 'fragile';
-  const checkpoint = platform.type === 'checkpoint';
   const spikes = platform.type === 'spikes';
   const goal = platform.type === 'goal';
   const breaking = breakingAt !== undefined;
@@ -1049,11 +1052,11 @@ function drawFallPlatform(ctx, platform, breakingAt, time) {
     platform.x,
     platform.y + platform.h,
   );
-  gradient.addColorStop(0, goal ? '#ebd18b' : checkpoint ? '#d7bd79' : fragile ? '#b8a8c3' : '#718097');
-  gradient.addColorStop(1, goal ? '#7d6538' : checkpoint ? '#68573c' : fragile ? '#4d425c' : '#273247');
+  gradient.addColorStop(0, goal ? '#ebd18b' : fragile ? '#b8a8c3' : '#718097');
+  gradient.addColorStop(1, goal ? '#7d6538' : fragile ? '#4d425c' : '#273247');
   ctx.fillStyle = gradient;
-  ctx.strokeStyle = goal || checkpoint ? '#f2d99a' : fragile ? '#ded0e7' : '#b2bdd0';
-  ctx.lineWidth = goal || checkpoint ? 2 : 1;
+  ctx.strokeStyle = goal ? '#f2d99a' : fragile ? '#ded0e7' : '#b2bdd0';
+  ctx.lineWidth = goal ? 2 : 1;
   roundedRect(ctx, platform.x, platform.y, platform.w, platform.h, 4);
   ctx.fill();
   ctx.stroke();
@@ -1065,12 +1068,6 @@ function drawFallPlatform(ctx, platform, breakingAt, time) {
     ctx.lineTo(platform.x + platform.w * 0.57, platform.y + 3);
     ctx.lineTo(platform.x + platform.w * 0.72, platform.y + platform.h - 2);
     ctx.stroke();
-  }
-  if (checkpoint) {
-    ctx.fillStyle = '#f5df9e';
-    ctx.font = '12px serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('✦', platform.x + platform.w / 2, platform.y - 7);
   }
   if (goal) {
     ctx.fillStyle = '#fff0bd';
@@ -1101,17 +1098,17 @@ function drawFallHazard(ctx, hazard) {
   ctx.restore();
 }
 
-function drawFallCeiling(ctx, dangerY, time) {
+function drawFallCeiling(ctx, dangerY, time, urgency = 0) {
   ctx.save();
   const gradient = ctx.createLinearGradient(0, 0, 0, dangerY + 12);
-  gradient.addColorStop(0, 'rgba(98, 31, 54, .96)');
+  gradient.addColorStop(0, `rgba(120, 28, 51, ${0.96 + urgency * 0.04})`);
   gradient.addColorStop(1, 'rgba(98, 31, 54, 0)');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, WORLD.width, dangerY + 12);
   ctx.fillStyle = '#843a52';
   ctx.strokeStyle = '#ef9db0';
   ctx.shadowColor = '#bb4969';
-  ctx.shadowBlur = 10 + Math.sin(time / 180) * 2;
+  ctx.shadowBlur = 10 + urgency * 8 + Math.sin(time / 180) * (2 + urgency * 3);
   for (let x = 0; x < WORLD.width; x += 18) {
     ctx.beginPath();
     ctx.moveTo(x, dangerY - 18);
@@ -1124,7 +1121,7 @@ function drawFallCeiling(ctx, dangerY, time) {
   ctx.restore();
 }
 
-function drawFallHud(ctx, lives, maxLives, distance, targetDistance) {
+function drawFallHud(ctx, lives, maxLives, remainingMs) {
   ctx.save();
   ctx.fillStyle = 'rgba(9, 14, 25, .76)';
   roundedRect(ctx, 12, 12, 112, 34, 17);
@@ -1136,14 +1133,15 @@ function drawFallHud(ctx, lives, maxLives, distance, targetDistance) {
     ctx.fillStyle = index < lives ? '#d97b91' : 'rgba(225, 214, 218, .2)';
     ctx.fillText('♥', 25 + index * 27, 30);
   }
-  const depth = Math.max(0, Math.min(100, Math.round((distance / targetDistance) * 100)));
+  const urgent = remainingMs <= 5000;
+  const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
   ctx.fillStyle = 'rgba(9, 14, 25, .76)';
   roundedRect(ctx, 260, 12, 88, 34, 17);
   ctx.fill();
-  ctx.fillStyle = '#dfd3b5';
-  ctx.font = '10px Georgia';
+  ctx.fillStyle = urgent ? '#f19aad' : '#dfd3b5';
+  ctx.font = urgent ? 'bold 13px Georgia' : '12px Georgia';
   ctx.textAlign = 'center';
-  ctx.fillText(`坠落 ${depth}%`, 304, 30);
+  ctx.fillText(`${seconds} 秒`, 304, 30);
   ctx.restore();
 }
 
@@ -1187,7 +1185,6 @@ function FallGameCanvas({
         y: course.start.y - 13,
       }),
       collected: new Set(),
-      checkpointId: course.start.id,
       lives: maxLives,
       maxLives,
       immunityUntil: 0,
@@ -1197,6 +1194,7 @@ function FallGameCanvas({
       complete: false,
       particles: [],
       shakeUntil: 0,
+      teleportUntil: 0,
       startedAt: performance.now(),
       pauseBeganAt: null,
       pausedDuration: 0,
@@ -1218,30 +1216,41 @@ function FallGameCanvas({
     resize();
     window.addEventListener('resize', resize);
 
-    const screenPlatform = (platform, scrollDistance) => ({
-      ...platform,
-      y: platform.y - scrollDistance,
-    });
-
-    const findRespawnPlatform = (state) => {
-      const checkpoint = state.course.platforms.find(
-        (platform) => platform.id === state.checkpointId,
-      );
-      if (checkpoint) {
-        const screenCheckpoint = screenPlatform(checkpoint, state.scrollDistance);
-        if (screenCheckpoint.y > 160 && screenCheckpoint.y < WORLD.height - 70) {
-          return screenCheckpoint;
-        }
+    const screenPlatform = (platform, scrollDistance, elapsedMs) => {
+      if (platform.type === 'goal') {
+        const durationMs = level.fallConfig?.durationMs || 30000;
+        return {
+          ...platform,
+          y: getFallGoalY(elapsedMs, durationMs),
+        };
       }
-      const candidates = state.course.platforms
-        .filter((platform) => (
-          platform.route &&
-          platform.type !== 'goal' &&
-          platform.y - state.scrollDistance > 300 &&
-          platform.y - state.scrollDistance < WORLD.height - 55
-        ))
-        .map((platform) => screenPlatform(platform, state.scrollDistance));
-      return candidates[0] || screenPlatform(state.course.start, state.scrollDistance);
+      return {
+        ...platform,
+        y: platform.y - scrollDistance,
+      };
+    };
+
+    const findRespawnPlatform = (state, time) => {
+      const elapsedMs = getFallElapsed(
+        time,
+        state.startedAt,
+        state.pausedDuration,
+        state.pauseBeganAt,
+      );
+      const activePlatforms = getActiveFallPlatforms(
+        state.course.platforms,
+        state.breakingPlatforms,
+        state.brokenPlatforms,
+        time,
+      ).map((platform) => screenPlatform(
+        platform,
+        state.scrollDistance,
+        elapsedMs,
+      ));
+      return selectFallRespawnPlatform(activePlatforms, state.player, {
+        topDangerY: level.fallConfig?.topDangerY || 70,
+        excludedIds: state.brokenPlatforms,
+      });
     };
 
     const resetRun = (state, time) => {
@@ -1249,8 +1258,10 @@ function FallGameCanvas({
       state.course = generateFallCourse(level.fallConfig, seed);
       state.breakingPlatforms = new Map();
       state.brokenPlatforms = new Set();
-      state.checkpointId = state.course.start.id;
       state.scrollDistance = 0;
+      state.startedAt = time;
+      state.pausedDuration = 0;
+      state.pauseBeganAt = null;
       resetBall(state.player, {
         x: state.course.start.x + state.course.start.w / 2,
         y: state.course.start.y - state.player.radius,
@@ -1268,12 +1279,24 @@ function FallGameCanvas({
         state.immunityUntil = time + 900;
         callbacksRef.current.onDeath(reason);
       } else {
-        const respawn = findRespawnPlatform(state);
+        const respawn = findRespawnPlatform(state, time);
+        if (!respawn) {
+          resetRun(state, time);
+          state.immunityUntil = time + (level.fallConfig?.respawnImmunity || 1200);
+          callbacksRef.current.onDamage?.({
+            reason,
+            lives: state.lives,
+            maxLives: state.maxLives,
+          });
+          return;
+        }
+        spawnBurst(state, state.player.x, state.player.y, '#d6c2ea', 12);
         resetBall(state.player, {
           x: respawn.x + respawn.w / 2,
           y: respawn.y - state.player.radius,
         });
-        state.checkpointId = respawn.id;
+        state.teleportUntil = time + 260;
+        spawnBurst(state, state.player.x, state.player.y, '#f0dba0', 16);
         state.immunityUntil = time + (level.fallConfig?.respawnImmunity || 1200);
         callbacksRef.current.onDamage?.({
           reason,
@@ -1296,15 +1319,16 @@ function FallGameCanvas({
       }
 
       if (state && !paused && !state.complete) {
-        const frameScale = Math.min(dt, 32) / 16.667;
-        const progress = state.scrollDistance / state.course.targetDistance;
-        const scrollSpeed = Math.min(
-          level.fallConfig?.maxScrollSpeed || 1.02,
-          (level.fallConfig?.scrollSpeed || 0.62) + progress * 0.4,
+        const elapsedMs = getFallElapsed(
+          time,
+          state.startedAt,
+          state.pausedDuration,
+          state.pauseBeganAt,
         );
-        state.scrollDistance = Math.min(
+        state.scrollDistance = getFallScrollDistance(
+          elapsedMs,
+          level.fallConfig?.durationMs || 30000,
           state.course.targetDistance,
-          state.scrollDistance + scrollSpeed * frameScale,
         );
         for (const [id, breakingAt] of state.breakingPlatforms) {
           const platform = state.course.platforms.find((entry) => entry.id === id);
@@ -1319,7 +1343,7 @@ function FallGameCanvas({
           time,
         );
         const activePlatforms = activeCoursePlatforms.map(
-          (platform) => screenPlatform(platform, state.scrollDistance),
+          (platform) => screenPlatform(platform, state.scrollDistance, elapsedMs),
         );
         if (state.player.groundedPlatformId) {
           const support = activePlatforms.find(
@@ -1337,10 +1361,6 @@ function FallGameCanvas({
         if (landed?.type === 'fragile' && !state.breakingPlatforms.has(landed.id)) {
           state.breakingPlatforms.set(landed.id, time);
           spawnBurst(state, state.player.x, landed.y, '#c8b4d0', 8);
-        }
-        if (landed?.type === 'checkpoint' && state.checkpointId !== landed.id) {
-          state.checkpointId = landed.id;
-          spawnBurst(state, landed.x + landed.w / 2, landed.y, '#f1d58b', 16);
         }
         if (landed?.type === 'spikes') takeDamage(state, 'spikes', time);
         if (landed?.type === 'goal') {
@@ -1379,8 +1399,27 @@ function FallGameCanvas({
       }
       drawPaper(ctx, artRef.current.garden);
       if (state) {
+        const elapsedMs = getFallElapsed(
+          time,
+          state.startedAt,
+          state.pausedDuration,
+          state.pauseBeganAt,
+        );
+        const durationMs = level.fallConfig?.durationMs || 30000;
+        const remainingMs = Math.max(0, durationMs - elapsedMs);
+        const urgency = Math.max(0, Math.min(1, (5000 - remainingMs) / 5000));
+        if (urgency > 0) {
+          ctx.fillStyle = `rgba(126, 27, 50, ${
+            (0.025 + Math.sin(time / 120) * 0.012) * urgency
+          })`;
+          ctx.fillRect(0, 0, WORLD.width, WORLD.height);
+        }
         for (const coursePlatform of state.course.platforms) {
-          const platform = screenPlatform(coursePlatform, state.scrollDistance);
+          const platform = screenPlatform(
+            coursePlatform,
+            state.scrollDistance,
+            elapsedMs,
+          );
           if (platform.y < -40 || platform.y > WORLD.height + 40) continue;
           if (state.brokenPlatforms.has(platform.id)) continue;
           drawFallPlatform(
@@ -1398,16 +1437,22 @@ function FallGameCanvas({
         drawPlayer(ctx, state.player, artRef.current.avatar, time, {
           mirrored: false,
           echo: false,
-          vanish: time < state.immunityUntil && Math.floor(time / 90) % 2 === 0,
+          vanish:
+            time < state.teleportUntil ||
+            (time < state.immunityUntil && Math.floor(time / 90) % 2 === 0),
         });
         state.particles = drawParticles(ctx, state.particles, dt);
-        drawFallCeiling(ctx, level.fallConfig?.topDangerY || 70, time);
+        drawFallCeiling(
+          ctx,
+          level.fallConfig?.topDangerY || 70,
+          time,
+          urgency,
+        );
         drawFallHud(
           ctx,
           state.lives,
           state.maxLives,
-          state.scrollDistance,
-          state.course.targetDistance,
+          remainingMs,
         );
       }
       ctx.restore();

@@ -8,6 +8,9 @@ import {
   canTriggerSwitch,
   circleRectCollision,
   generateFallCourse,
+  getFallElapsed,
+  getFallGoalY,
+  getFallScrollDistance,
   getEchoReplayPosition,
   getMoverRect,
   getMovingZoneRect,
@@ -25,6 +28,7 @@ import {
   makeBall,
   requirementsMet,
   rotateRect,
+  selectFallRespawnPlatform,
   segmentCrossesHoop,
   transformControlInput,
   updateMirrorZoneMembership,
@@ -95,6 +99,61 @@ test('spends fall health before restarting the run', () => {
   assert.deepEqual(applyFallDamage(1), { lives: 3, restart: true });
 });
 
+test('drives fall distance from elapsed time instead of frame count', () => {
+  const duration = 30000;
+  const distance = 2400;
+  assert.equal(getFallScrollDistance(0, duration, distance), 0);
+  assert.equal(getFallScrollDistance(duration, duration, distance), distance);
+  assert.equal(getFallScrollDistance(duration * 2, duration, distance), distance);
+  assert.ok(getFallScrollDistance(15000, duration, distance) > distance * 0.38);
+  assert.ok(getFallScrollDistance(25000, duration, distance) > distance * 0.76);
+  assert.equal(
+    getFallScrollDistance(17342, duration, distance),
+    getFallScrollDistance(17342, duration, distance),
+  );
+});
+
+test('raises the landing platform during the final five seconds', () => {
+  assert.equal(getFallGoalY(24999, 30000), 720);
+  assert.equal(getFallGoalY(25000, 30000), 650);
+  assert.equal(getFallGoalY(27500, 30000), 575);
+  assert.equal(getFallGoalY(30000, 30000), 500);
+});
+
+test('excludes completed and active pauses from fall elapsed time', () => {
+  assert.equal(getFallElapsed(18000, 1000, 2000), 15000);
+  assert.equal(getFallElapsed(18000, 1000, 2000, 15000), 12000);
+});
+
+test('selects the nearest safe platform above the player', () => {
+  const player = { x: 180, y: 360, radius: 13 };
+  const platforms = [
+    { id: 'far', type: 'solid', route: true, x: 30, y: 190, w: 100 },
+    { id: 'near', type: 'solid', route: true, x: 150, y: 260, w: 100 },
+    { id: 'below', type: 'solid', route: true, x: 150, y: 430, w: 100 },
+    { id: 'spikes', type: 'spikes', route: false, x: 160, y: 300, w: 80 },
+    { id: 'fragile', type: 'fragile', route: false, x: 160, y: 290, w: 80 },
+    { id: 'goal', type: 'goal', route: true, x: 140, y: 280, w: 120 },
+  ];
+  assert.equal(selectFallRespawnPlatform(platforms, player).id, 'near');
+});
+
+test('falls back to a central safe platform and excludes unsafe positions', () => {
+  const player = { x: 180, y: 75, radius: 13 };
+  const platforms = [
+    { id: 'top', type: 'solid', route: true, x: 120, y: 90, w: 120 },
+    { id: 'center', type: 'solid', route: true, x: 120, y: 300, w: 120 },
+    { id: 'lower', type: 'solid', route: true, x: 120, y: 520, w: 120 },
+  ];
+  assert.equal(
+    selectFallRespawnPlatform(platforms, player, {
+      topDangerY: 70,
+      excludedIds: new Set(['lower']),
+    }).id,
+    'center',
+  );
+});
+
 test('generates a safe route before adding optional fall hazards', () => {
   for (let seed = 1; seed <= 200; seed += 1) {
     const course = generateFallCourse({ targetDistance: 2400 }, seed);
@@ -104,7 +163,7 @@ test('generates a safe route before adding optional fall hazards', () => {
     assert.ok(route.length >= 16, `seed ${seed} needs enough route platforms`);
     for (let index = 0; index < route.length; index += 1) {
       assert.ok(
-        ['solid', 'checkpoint'].includes(route[index].type),
+        route[index].type === 'solid',
         `seed ${seed} put ${route[index].type} on the mandatory route`,
       );
       if (index === 0) continue;

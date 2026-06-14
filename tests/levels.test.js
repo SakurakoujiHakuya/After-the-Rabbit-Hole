@@ -670,15 +670,20 @@ test('defines a complete vertical fall route for the opening chapter', () => {
   assert.ok(level.worldHeight >= 2200);
   assert.equal(level.fallConfig.lives, 3);
   assert.equal(level.fallConfig.targetDistance, level.worldHeight);
-  assert.ok(level.fallConfig.scrollSpeed > 0);
-  assert.ok(level.fallConfig.maxScrollSpeed >= level.fallConfig.scrollSpeed);
+  assert.equal(level.fallConfig.durationMs, 30000);
+  assert.equal(level.parTime, level.fallConfig.durationMs);
   assert.ok(level.fallConfig.topDangerY > 0);
 
   const course = generateFallCourse(level.fallConfig, 42);
   assert.ok(course.platforms.length >= 16);
   assert.ok(course.platforms.some((platform) => platform.type === 'fragile'));
   assert.ok(course.platforms.some((platform) => platform.type === 'spikes'));
-  assert.ok(course.platforms.filter((platform) => platform.type === 'checkpoint').length >= 2);
+  assert.equal(course.platforms.some((platform) => platform.type === 'checkpoint'), false);
+  assert.ok(
+    course.platforms
+      .filter((platform) => platform.route && platform.type !== 'goal')
+      .every((platform) => platform.type === 'solid'),
+  );
   assert.equal(course.items[0].id, 'cameo-rabbit-fall');
 });
 
