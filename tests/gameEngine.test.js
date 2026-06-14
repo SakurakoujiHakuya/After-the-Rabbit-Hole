@@ -7,10 +7,10 @@ import {
   canScoreLinkedHoop,
   canTriggerSwitch,
   circleRectCollision,
+  generateFallCourse,
   getMoverRect,
   getActiveFallPlatforms,
   getActiveMirrorZones,
-  getFallCameraY,
   getMirrorZoneEffects,
   getPhaseWalls,
   getRotatorWalls,
@@ -83,17 +83,51 @@ test('expires fragile platforms after their configured delay', () => {
   );
 });
 
-test('keeps the fall camera inside the world and moving downward', () => {
-  assert.equal(getFallCameraY(100, 0, 2400), 0);
-  assert.equal(getFallCameraY(900, 0, 2400), 680);
-  assert.equal(getFallCameraY(400, 680, 2400), 680);
-  assert.equal(getFallCameraY(2600, 0, 2400), 1760);
-});
-
 test('spends fall health before restarting the run', () => {
   assert.deepEqual(applyFallDamage(3), { lives: 2, restart: false });
   assert.deepEqual(applyFallDamage(2), { lives: 1, restart: false });
   assert.deepEqual(applyFallDamage(1), { lives: 3, restart: true });
+});
+
+test('generates a safe route before adding optional fall hazards', () => {
+  for (let seed = 1; seed <= 200; seed += 1) {
+    const course = generateFallCourse({ targetDistance: 2400 }, seed);
+    const route = course.platforms.filter(
+      (platform) => platform.route && platform.type !== 'goal',
+    );
+    assert.ok(route.length >= 16, `seed ${seed} needs enough route platforms`);
+    for (let index = 0; index < route.length; index += 1) {
+      assert.ok(
+        ['solid', 'checkpoint'].includes(route[index].type),
+        `seed ${seed} put ${route[index].type} on the mandatory route`,
+      );
+      if (index === 0) continue;
+      const previousCenter = route[index - 1].x + route[index - 1].w / 2;
+      const currentCenter = route[index].x + route[index].w / 2;
+      assert.ok(
+        Math.abs(currentCenter - previousCenter) <= 105,
+        `seed ${seed} generated an unreachable horizontal jump`,
+      );
+      assert.ok(
+        route[index].y - route[index - 1].y >= 112 &&
+        route[index].y - route[index - 1].y <= 142,
+        `seed ${seed} generated an invalid vertical gap`,
+      );
+    }
+    assert.ok(course.platforms.some((platform) => platform.type === 'goal'));
+    assert.ok(course.items.every((item) => (
+      course.platforms.some((platform) => platform.id === item.platformId)
+    )));
+  }
+});
+
+test('keeps spike platforms off every generated safe route', () => {
+  for (let seed = 201; seed <= 400; seed += 1) {
+    const course = generateFallCourse({}, seed);
+    for (const platform of course.platforms) {
+      if (platform.type === 'spikes') assert.equal(platform.route, false);
+    }
+  }
 });
 
 test('moves hazards along their configured axis', () => {

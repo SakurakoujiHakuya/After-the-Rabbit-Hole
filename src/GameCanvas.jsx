@@ -8,10 +8,10 @@ import {
   canTriggerSwitch,
   canScoreLinkedHoop,
   circleRectCollision,
+  generateFallCourse,
   getMoverRect,
   getActiveFallPlatforms,
   getActiveMirrorZones,
-  getFallCameraY,
   getMirrorZoneEffects,
   getPhaseWalls,
   getRotatorWalls,
@@ -919,6 +919,8 @@ function drawFallPlatform(ctx, platform, breakingAt, time) {
   ctx.save();
   const fragile = platform.type === 'fragile';
   const checkpoint = platform.type === 'checkpoint';
+  const spikes = platform.type === 'spikes';
+  const goal = platform.type === 'goal';
   const breaking = breakingAt !== undefined;
   if (breaking) {
     const progress = Math.min(1, (time - breakingAt) / (platform.breakDelay ?? 450));
@@ -931,11 +933,11 @@ function drawFallPlatform(ctx, platform, breakingAt, time) {
     platform.x,
     platform.y + platform.h,
   );
-  gradient.addColorStop(0, checkpoint ? '#d7bd79' : fragile ? '#b8a8c3' : '#718097');
-  gradient.addColorStop(1, checkpoint ? '#68573c' : fragile ? '#4d425c' : '#273247');
+  gradient.addColorStop(0, goal ? '#ebd18b' : checkpoint ? '#d7bd79' : fragile ? '#b8a8c3' : '#718097');
+  gradient.addColorStop(1, goal ? '#7d6538' : checkpoint ? '#68573c' : fragile ? '#4d425c' : '#273247');
   ctx.fillStyle = gradient;
-  ctx.strokeStyle = checkpoint ? '#f2d99a' : fragile ? '#ded0e7' : '#b2bdd0';
-  ctx.lineWidth = checkpoint ? 2 : 1;
+  ctx.strokeStyle = goal || checkpoint ? '#f2d99a' : fragile ? '#ded0e7' : '#b2bdd0';
+  ctx.lineWidth = goal || checkpoint ? 2 : 1;
   roundedRect(ctx, platform.x, platform.y, platform.w, platform.h, 4);
   ctx.fill();
   ctx.stroke();
@@ -954,6 +956,13 @@ function drawFallPlatform(ctx, platform, breakingAt, time) {
     ctx.textAlign = 'center';
     ctx.fillText('✦', platform.x + platform.w / 2, platform.y - 7);
   }
+  if (goal) {
+    ctx.fillStyle = '#fff0bd';
+    ctx.font = '13px Georgia';
+    ctx.textAlign = 'center';
+    ctx.fillText('兔子洞出口', platform.x + platform.w / 2, platform.y - 9);
+  }
+  if (spikes) drawFallHazard(ctx, platform);
   ctx.restore();
 }
 
@@ -976,7 +985,30 @@ function drawFallHazard(ctx, hazard) {
   ctx.restore();
 }
 
-function drawFallHud(ctx, lives, maxLives, playerY, worldHeight) {
+function drawFallCeiling(ctx, dangerY, time) {
+  ctx.save();
+  const gradient = ctx.createLinearGradient(0, 0, 0, dangerY + 12);
+  gradient.addColorStop(0, 'rgba(98, 31, 54, .96)');
+  gradient.addColorStop(1, 'rgba(98, 31, 54, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, WORLD.width, dangerY + 12);
+  ctx.fillStyle = '#843a52';
+  ctx.strokeStyle = '#ef9db0';
+  ctx.shadowColor = '#bb4969';
+  ctx.shadowBlur = 10 + Math.sin(time / 180) * 2;
+  for (let x = 0; x < WORLD.width; x += 18) {
+    ctx.beginPath();
+    ctx.moveTo(x, dangerY - 18);
+    ctx.lineTo(x + 9, dangerY);
+    ctx.lineTo(x + 18, dangerY - 18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawFallHud(ctx, lives, maxLives, distance, targetDistance) {
   ctx.save();
   ctx.fillStyle = 'rgba(9, 14, 25, .76)';
   roundedRect(ctx, 12, 12, 112, 34, 17);
@@ -988,7 +1020,7 @@ function drawFallHud(ctx, lives, maxLives, playerY, worldHeight) {
     ctx.fillStyle = index < lives ? '#d97b91' : 'rgba(225, 214, 218, .2)';
     ctx.fillText('♥', 25 + index * 27, 30);
   }
-  const depth = Math.max(0, Math.min(100, Math.round((playerY / worldHeight) * 100)));
+  const depth = Math.max(0, Math.min(100, Math.round((distance / targetDistance) * 100)));
   ctx.fillStyle = 'rgba(9, 14, 25, .76)';
   roundedRect(ctx, 260, 12, 88, 34, 17);
   ctx.fill();
@@ -1030,17 +1062,22 @@ function FallGameCanvas({
 
   useEffect(() => {
     const maxLives = level.fallConfig?.lives || 3;
+    const seed = (Date.now() ^ (resetToken * 2654435761)) >>> 0;
+    const course = generateFallCourse(level.fallConfig, seed);
     stateRef.current = {
-      player: makeBall(level.start),
+      course,
+      player: makeBall({
+        x: course.start.x + course.start.w / 2,
+        y: course.start.y - 13,
+      }),
       collected: new Set(),
-      checkpoint: { ...level.start },
-      checkpointId: null,
+      checkpointId: course.start.id,
       lives: maxLives,
       maxLives,
       immunityUntil: 0,
       breakingPlatforms: new Map(),
       brokenPlatforms: new Set(),
-      cameraY: 0,
+      scrollDistance: 0,
       complete: false,
       particles: [],
       shakeUntil: 0,
@@ -1065,13 +1102,43 @@ function FallGameCanvas({
     resize();
     window.addEventListener('resize', resize);
 
-    const resetRun = (state) => {
-      state.checkpoint = { ...level.start };
-      state.checkpointId = null;
+    const screenPlatform = (platform, scrollDistance) => ({
+      ...platform,
+      y: platform.y - scrollDistance,
+    });
+
+    const findRespawnPlatform = (state) => {
+      const checkpoint = state.course.platforms.find(
+        (platform) => platform.id === state.checkpointId,
+      );
+      if (checkpoint) {
+        const screenCheckpoint = screenPlatform(checkpoint, state.scrollDistance);
+        if (screenCheckpoint.y > 160 && screenCheckpoint.y < WORLD.height - 70) {
+          return screenCheckpoint;
+        }
+      }
+      const candidates = state.course.platforms
+        .filter((platform) => (
+          platform.route &&
+          platform.type !== 'goal' &&
+          platform.y - state.scrollDistance > 300 &&
+          platform.y - state.scrollDistance < WORLD.height - 55
+        ))
+        .map((platform) => screenPlatform(platform, state.scrollDistance));
+      return candidates[0] || screenPlatform(state.course.start, state.scrollDistance);
+    };
+
+    const resetRun = (state, time) => {
+      const seed = ((Date.now() + Math.round(time)) ^ (resetToken * 2654435761)) >>> 0;
+      state.course = generateFallCourse(level.fallConfig, seed);
       state.breakingPlatforms = new Map();
       state.brokenPlatforms = new Set();
-      resetBall(state.player, level.start);
-      state.cameraY = 0;
+      state.checkpointId = state.course.start.id;
+      state.scrollDistance = 0;
+      resetBall(state.player, {
+        x: state.course.start.x + state.course.start.w / 2,
+        y: state.course.start.y - state.player.radius,
+      });
     };
 
     const takeDamage = (state, reason, time) => {
@@ -1081,15 +1148,16 @@ function FallGameCanvas({
       state.shakeUntil = time + 280;
       spawnBurst(state, state.player.x, state.player.y, '#df8198', 18);
       if (result.restart) {
-        resetRun(state);
+        resetRun(state, time);
         state.immunityUntil = time + 900;
         callbacksRef.current.onDeath(reason);
       } else {
-        resetBall(state.player, state.checkpoint);
-        state.cameraY = Math.max(
-          0,
-          Math.min(level.worldHeight - WORLD.height, state.checkpoint.y - 180),
-        );
+        const respawn = findRespawnPlatform(state);
+        resetBall(state.player, {
+          x: respawn.x + respawn.w / 2,
+          y: respawn.y - state.player.radius,
+        });
+        state.checkpointId = respawn.id;
         state.immunityUntil = time + (level.fallConfig?.respawnImmunity || 1200);
         callbacksRef.current.onDamage?.({
           reason,
@@ -1112,18 +1180,37 @@ function FallGameCanvas({
       }
 
       if (state && !paused && !state.complete) {
+        const frameScale = Math.min(dt, 32) / 16.667;
+        const progress = state.scrollDistance / state.course.targetDistance;
+        const scrollSpeed = Math.min(
+          level.fallConfig?.maxScrollSpeed || 1.02,
+          (level.fallConfig?.scrollSpeed || 0.62) + progress * 0.4,
+        );
+        state.scrollDistance = Math.min(
+          state.course.targetDistance,
+          state.scrollDistance + scrollSpeed * frameScale,
+        );
         for (const [id, breakingAt] of state.breakingPlatforms) {
-          const platform = level.platforms.find((entry) => entry.id === id);
+          const platform = state.course.platforms.find((entry) => entry.id === id);
           if (platform && time - breakingAt >= (platform.breakDelay ?? 450)) {
             state.brokenPlatforms.add(id);
           }
         }
-        const activePlatforms = getActiveFallPlatforms(
-          level.platforms,
+        const activeCoursePlatforms = getActiveFallPlatforms(
+          state.course.platforms,
           state.breakingPlatforms,
           state.brokenPlatforms,
           time,
         );
+        const activePlatforms = activeCoursePlatforms.map(
+          (platform) => screenPlatform(platform, state.scrollDistance),
+        );
+        if (state.player.groundedPlatformId) {
+          const support = activePlatforms.find(
+            (platform) => platform.id === state.player.groundedPlatformId,
+          );
+          if (support) state.player.y = support.y - state.player.radius;
+        }
         const landed = updateFallPlayer(
           state.player,
           gravityRef.current?.x || 0,
@@ -1137,40 +1224,35 @@ function FallGameCanvas({
         }
         if (landed?.type === 'checkpoint' && state.checkpointId !== landed.id) {
           state.checkpointId = landed.id;
-          state.checkpoint = {
-            x: landed.x + landed.w / 2,
-            y: landed.y - state.player.radius,
-          };
-          spawnBurst(state, state.checkpoint.x, landed.y, '#f1d58b', 16);
+          spawnBurst(state, landed.x + landed.w / 2, landed.y, '#f1d58b', 16);
         }
-
-        state.cameraY = getFallCameraY(
-          state.player.y,
-          state.cameraY,
-          level.worldHeight,
-        );
-
-        for (const item of level.items || []) {
-          if (state.collected.has(item.id) || !overlapsItem(state.player, item)) continue;
-          state.collected.add(item.id);
-          spawnBurst(state, item.x, item.y, '#f1d38e', 14);
-          callbacksRef.current.onCollect(item);
-        }
-
-        const hazard = (level.fallHazards || []).find(
-          (entry) => circleRectCollision(state.player, entry),
-        );
-        if (hazard) takeDamage(state, 'spikes', time);
-        if (state.player.y - state.player.radius > level.worldHeight + 40) {
-          takeDamage(state, 'fall', time);
-        }
-
-        if (circleRectCollision(state.player, level.goal)) {
+        if (landed?.type === 'spikes') takeDamage(state, 'spikes', time);
+        if (landed?.type === 'goal') {
           state.complete = true;
           callbacksRef.current.onComplete(
             time - state.startedAt - state.pausedDuration,
             [...state.collected],
           );
+        }
+
+        for (const item of state.course.items) {
+          const screenItem = { ...item, y: item.y - state.scrollDistance };
+          if (
+            state.collected.has(item.id) ||
+            !overlapsItem(state.player, screenItem)
+          ) continue;
+          state.collected.add(item.id);
+          spawnBurst(state, screenItem.x, screenItem.y, '#f1d38e', 14);
+          callbacksRef.current.onCollect(item);
+        }
+
+        if (
+          state.player.y - state.player.radius <=
+          (level.fallConfig?.topDangerY || 70)
+        ) {
+          takeDamage(state, 'top', time);
+        } else if (state.player.y - state.player.radius > WORLD.height + 40) {
+          takeDamage(state, 'fall', time);
         }
       }
 
@@ -1181,9 +1263,9 @@ function FallGameCanvas({
       }
       drawPaper(ctx, artRef.current.garden);
       if (state) {
-        ctx.save();
-        ctx.translate(0, -state.cameraY);
-        for (const platform of level.platforms) {
+        for (const coursePlatform of state.course.platforms) {
+          const platform = screenPlatform(coursePlatform, state.scrollDistance);
+          if (platform.y < -40 || platform.y > WORLD.height + 40) continue;
           if (state.brokenPlatforms.has(platform.id)) continue;
           drawFallPlatform(
             ctx,
@@ -1192,10 +1274,10 @@ function FallGameCanvas({
             time,
           );
         }
-        (level.fallHazards || []).forEach((hazard) => drawFallHazard(ctx, hazard));
-        drawDoor(ctx, level.goal, true, time);
-        for (const item of level.items || []) {
-          if (!state.collected.has(item.id)) drawItem(ctx, item, time, artRef.current);
+        for (const item of state.course.items) {
+          if (!state.collected.has(item.id)) {
+            drawItem(ctx, { ...item, y: item.y - state.scrollDistance }, time, artRef.current);
+          }
         }
         drawPlayer(ctx, state.player, artRef.current.avatar, time, {
           mirrored: false,
@@ -1203,13 +1285,13 @@ function FallGameCanvas({
           vanish: time < state.immunityUntil && Math.floor(time / 90) % 2 === 0,
         });
         state.particles = drawParticles(ctx, state.particles, dt);
-        ctx.restore();
+        drawFallCeiling(ctx, level.fallConfig?.topDangerY || 70, time);
         drawFallHud(
           ctx,
           state.lives,
           state.maxLives,
-          state.player.y,
-          level.worldHeight,
+          state.scrollDistance,
+          state.course.targetDistance,
         );
       }
       ctx.restore();

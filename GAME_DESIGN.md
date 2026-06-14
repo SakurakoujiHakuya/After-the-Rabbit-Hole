@@ -15,7 +15,7 @@
 - https://www.nintendo.com/us/whatsnew/ask-the-developer-vol-11-super-mario-bros-wonder-part-3/
 - https://www.sega.com/super-monkey-ball
 
-1. `兔子洞没有底`：纵向滚屏下坠，只控制左右落点，学习普通、脆弱与检查点平台。
+1. `兔子洞没有底`：随机生成平台持续上升，只控制左右落点；被推到洞顶或踩中危险平台会损失生命。
 2. `门厅有许多门`：钥匙、尺寸与窄缝。
 3. `白兔宅邸`：喝药缩小、穿过迷你门、拾取折扇，并在横向风中寻找低矮门闩。
 4. `眼泪汇成了海`：水流和检查点。
@@ -40,7 +40,7 @@
 - 关卡使用稳定字符串 `id`，不要用数组下标作为存档键。
 - `next` 和 `choices[].next` 必须引用有效关卡。
 - 新机制优先通过关卡 JSON 字段表达，不把关卡特例写进 UI。
-- 非迷宫下坠关使用 `mode: "fall"`、`worldHeight`、`platforms` 与 `fallConfig`；平台碰撞只接受从上方落下。
+- 非迷宫下坠关使用 `mode: "fall"` 与 `fallConfig`；生成器必须先构造可达的安全平台链，再添加脆弱或尖刺支路，平台碰撞只接受从上方落下。
 - 关键机关必须具备颜色之外的形状提示，确保小屏幕仍可辨认。
 - 顺序谜题使用 `switchSequence`，轨道障碍使用 `path: "orbit"`，两者都必须通过数据测试。
 - 动态房间使用 `rotators` 和 `requirements.rotations`，仅采用 90 度离散旋转以保证移动端碰撞稳定。

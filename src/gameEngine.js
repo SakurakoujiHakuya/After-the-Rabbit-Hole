@@ -274,16 +274,116 @@ export function updateFallPlayer(player, inputX, platforms, dt, options = {}) {
   return landedPlatform;
 }
 
-export function getFallCameraY(
-  playerY,
-  currentY,
-  worldHeight,
-  viewportHeight = WORLD.height,
-  followLine = 220,
-) {
-  const maximum = Math.max(0, worldHeight - viewportHeight);
-  const target = Math.max(0, Math.min(maximum, playerY - followLine));
-  return Math.max(currentY, target);
+export function makeSeededRandom(seed = 1) {
+  let value = seed >>> 0;
+  return () => {
+    value += 0x6d2b79f5;
+    let result = value;
+    result = Math.imul(result ^ (result >>> 15), result | 1);
+    result ^= result + Math.imul(result ^ (result >>> 7), result | 61);
+    return ((result ^ (result >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function generateFallCourse(config = {}, seed = 1) {
+  const random = makeSeededRandom(seed);
+  const targetDistance = config.targetDistance ?? 2400;
+  const rowGapMin = config.rowGapMin ?? 112;
+  const rowGapMax = config.rowGapMax ?? 142;
+  const routeWidthMin = config.routeWidthMin ?? 112;
+  const routeWidthMax = config.routeWidthMax ?? 152;
+  const maxRouteShift = config.maxRouteShift ?? 104;
+  const sideMargin = config.sideMargin ?? 18;
+  const platforms = [];
+  let courseY = config.startY ?? 220;
+  let routeCenter = WORLD.width / 2;
+  let row = 0;
+
+  const randomBetween = (minimum, maximum) => (
+    minimum + random() * (maximum - minimum)
+  );
+  const addRoutePlatform = (type = 'solid') => {
+    const width = Math.round(randomBetween(routeWidthMin, routeWidthMax));
+    const minimumCenter = sideMargin + width / 2;
+    const maximumCenter = WORLD.width - sideMargin - width / 2;
+    routeCenter = Math.max(
+      minimumCenter,
+      Math.min(
+        maximumCenter,
+        routeCenter + randomBetween(-maxRouteShift, maxRouteShift),
+      ),
+    );
+    const platform = {
+      id: `fall-route-${row}`,
+      type,
+      route: true,
+      x: Math.round(routeCenter - width / 2),
+      y: Math.round(courseY),
+      w: width,
+      h: type === 'checkpoint' ? 16 : 14,
+    };
+    platforms.push(platform);
+    return platform;
+  };
+
+  const start = addRoutePlatform('solid');
+  while (courseY < targetDistance) {
+    row += 1;
+    courseY += randomBetween(rowGapMin, rowGapMax);
+    const route = addRoutePlatform(row % 7 === 0 ? 'checkpoint' : 'solid');
+
+    if (random() < 0.72) {
+      const bonusWidth = Math.round(randomBetween(72, 102));
+      const leftSpace = route.x - sideMargin - 20;
+      const rightSpace = WORLD.width - sideMargin - (route.x + route.w) - 20;
+      const useLeft = leftSpace >= bonusWidth && (rightSpace < bonusWidth || random() < 0.5);
+      const available = useLeft ? leftSpace : rightSpace;
+      if (available >= bonusWidth) {
+        const x = useLeft
+          ? sideMargin + randomBetween(0, available - bonusWidth)
+          : route.x + route.w + 20 + randomBetween(0, available - bonusWidth);
+        const hazard = random() < 0.32;
+        platforms.push({
+          id: `fall-bonus-${row}`,
+          type: hazard ? 'spikes' : 'fragile',
+          route: false,
+          x: Math.round(x),
+          y: Math.round(courseY + randomBetween(-18, 18)),
+          w: bonusWidth,
+          h: 14,
+          breakDelay: hazard ? undefined : 520,
+        });
+      }
+    }
+  }
+
+  row += 1;
+  courseY = targetDistance + 260;
+  const goal = addRoutePlatform('goal');
+  goal.w = Math.max(goal.w, 144);
+  goal.x = Math.round(Math.max(sideMargin, Math.min(
+    WORLD.width - sideMargin - goal.w,
+    routeCenter - goal.w / 2,
+  )));
+
+  const bonusPlatforms = platforms.filter((platform) => platform.type === 'fragile');
+  const cameoPlatform = bonusPlatforms.reduce((closest, platform) => (
+    !closest ||
+    Math.abs(platform.y - targetDistance * 0.58) <
+    Math.abs(closest.y - targetDistance * 0.58)
+      ? platform
+      : closest
+  ), null) || platforms[Math.floor(platforms.length * 0.58)];
+  const items = [{
+    id: 'cameo-rabbit-fall',
+    type: 'curiosity',
+    x: Math.round(cameoPlatform.x + cameoPlatform.w / 2),
+    y: cameoPlatform.y - 22,
+    r: 11,
+    platformId: cameoPlatform.id,
+  }];
+
+  return { seed, start, platforms, items, goal, targetDistance };
 }
 
 export function applyFallDamage(lives, maxLives = 3) {

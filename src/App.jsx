@@ -707,6 +707,7 @@ export default function App() {
       watch: '怀表追上了你，时间重新开始。',
       hazard: '漩涡把方向揉成了一团。',
       spikes: '三颗心都碎了。兔子洞把你送回了最初的落点。',
+      top: '洞顶的尖刺耗尽了三颗心。平台重新洗牌。',
       fall: '你坠过了兔子洞的边界，只好从顶部重新寻找落点。',
     };
     setToast(messages[reason] || messages.hazard);
@@ -714,9 +715,12 @@ export default function App() {
   };
 
   const handleDamage = ({ reason, lives }) => {
-    setToast(reason === 'spikes'
-      ? `尖刺擦伤了你。还剩 ${lives} 颗心，回到最近的金色平台。`
-      : `你错过了落点。还剩 ${lives} 颗心，回到最近的金色平台。`);
+    const messages = {
+      spikes: `你踩中了尖刺平台。还剩 ${lives} 颗心。`,
+      top: `世界把你推到了洞顶。还剩 ${lives} 颗心。`,
+      fall: `你错过了所有平台。还剩 ${lives} 颗心。`,
+    };
+    setToast(messages[reason] || messages.fall);
     if (navigator.vibrate) navigator.vibrate([35, 25, 35]);
   };
 

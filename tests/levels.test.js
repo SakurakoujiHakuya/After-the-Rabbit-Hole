@@ -7,6 +7,7 @@ import {
   circleRectCollision,
   getPhaseWalls,
   getRotatorWalls,
+  generateFallCourse,
   isItemAvailable,
   makeBall,
   requirementsMet,
@@ -611,31 +612,17 @@ test('defines a complete vertical fall route for the opening chapter', () => {
   assert.equal(level.mode, 'fall');
   assert.ok(level.worldHeight >= 2200);
   assert.equal(level.fallConfig.lives, 3);
-  assert.ok(level.goal.y > 2000);
-  assert.ok(level.platforms.length >= 14);
-  assert.ok(level.platforms.some((platform) => platform.type === 'fragile'));
-  assert.ok(level.platforms.filter((platform) => platform.type === 'checkpoint').length >= 2);
-  assert.ok(level.fallHazards.length >= 3);
+  assert.equal(level.fallConfig.targetDistance, level.worldHeight);
+  assert.ok(level.fallConfig.scrollSpeed > 0);
+  assert.ok(level.fallConfig.maxScrollSpeed >= level.fallConfig.scrollSpeed);
+  assert.ok(level.fallConfig.topDangerY > 0);
 
-  const ids = new Set();
-  let previousY = 0;
-  for (const platform of level.platforms) {
-    assert.ok(platform.id && !ids.has(platform.id));
-    ids.add(platform.id);
-    assert.ok(['solid', 'fragile', 'checkpoint'].includes(platform.type));
-    assert.ok(platform.x >= 0 && platform.x + platform.w <= 360);
-    assert.ok(platform.y > previousY, `${platform.id} is out of fall order`);
-    assert.ok(platform.y < level.worldHeight);
-    previousY = platform.y;
-  }
-
-  const cameo = level.items.find((item) => item.id === 'cameo-rabbit-fall');
-  const cameoPlatform = level.platforms.find((platform) => (
-    cameo.x >= platform.x &&
-    cameo.x <= platform.x + platform.w &&
-    cameo.y < platform.y
-  ));
-  assert.ok(cameoPlatform, 'the hidden cameo needs a reachable landing platform');
+  const course = generateFallCourse(level.fallConfig, 42);
+  assert.ok(course.platforms.length >= 16);
+  assert.ok(course.platforms.some((platform) => platform.type === 'fragile'));
+  assert.ok(course.platforms.some((platform) => platform.type === 'spikes'));
+  assert.ok(course.platforms.filter((platform) => platform.type === 'checkpoint').length >= 2);
+  assert.equal(course.items[0].id, 'cameo-rabbit-fall');
 });
 
 test('defines reachable croquet routes with valid flamingo impulses', () => {
