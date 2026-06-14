@@ -8,7 +8,9 @@ import {
   canTriggerSwitch,
   circleRectCollision,
   generateFallCourse,
+  getEchoReplayPosition,
   getMoverRect,
+  getMovingZoneRect,
   getActiveFallPlatforms,
   getActiveMirrorZones,
   getMirrorZoneEffects,
@@ -17,12 +19,16 @@ import {
   isBumperEnabled,
   isItemAvailable,
   isMirrorControlActive,
+  isMoverActive,
+  isSimultaneousGroupOccupied,
+  isTriggerOccupied,
   makeBall,
   requirementsMet,
   rotateRect,
   segmentCrossesHoop,
   transformControlInput,
   updateMirrorZoneMembership,
+  updateStealthAlert,
   updateBall,
   updateFallPlayer,
 } from '../src/gameEngine.js';
@@ -233,38 +239,70 @@ test('combines global and local mirror inversion with xor semantics', () => {
   );
 });
 
-test('adds a bounded delayed echo to control input', () => {
+test('interpolates a visible replay from two seconds of position history', () => {
   const history = [
-    { time: 100, x: 1, y: 0 },
-    { time: 450, x: 0, y: 1 },
-    { time: 500, x: 0, y: 1 },
+    { time: 0, x: 20, y: 30 },
+    { time: 500, x: 70, y: 80 },
+    { time: 1000, x: 120, y: 130 },
   ];
-  const echoZone = [{
-    effect: 'echo',
-    delay: 400,
-    strength: 0.28,
-    maxMagnitude: 1.75,
-  }];
   assert.deepEqual(
-    transformControlInput(
-      { x: 0, y: 1 },
-      null,
-      { collected: new Set() },
-      echoZone,
-      history,
-      500,
-    ),
-    { x: 0.28, y: 1 },
+    getEchoReplayPosition(history, 2500, { delay: 2000 }),
+    { x: 70, y: 80 },
   );
-  const bounded = transformControlInput(
-    { x: 2, y: 2 },
-    null,
-    { collected: new Set() },
-    echoZone,
-    [{ time: 100, x: 2, y: 2 }],
-    500,
+  assert.deepEqual(
+    getEchoReplayPosition(history, 2250, { delay: 2000 }),
+    { x: 45, y: 55 },
   );
-  assert.ok(Math.hypot(bounded.x, bounded.y) <= 1.75 + Number.EPSILON);
+  assert.equal(getEchoReplayPosition(history, 1500, { delay: 2000 }), null);
+});
+
+test('requires the present and replay Alice to occupy their own identity seals', () => {
+  const player = { x: 280, y: 320, radius: 13 };
+  const echo = { x: 70, y: 320 };
+  const triggers = [
+    { id: 'past', triggerSource: 'echo', x: 70, y: 320, r: 20 },
+    { id: 'present', triggerSource: 'player', x: 280, y: 320, r: 20 },
+  ];
+  assert.equal(isTriggerOccupied(triggers[0], player, echo), true);
+  assert.equal(isTriggerOccupied(triggers[1], player, echo), true);
+  assert.equal(isSimultaneousGroupOccupied(triggers, player, echo), true);
+  assert.equal(
+    isSimultaneousGroupOccupied(triggers, player, { x: 280, y: 320 }),
+    false,
+  );
+});
+
+test('moves a ping-pong cat fog along configured waypoints and pauses at turns', () => {
+  const zone = {
+    w: 100,
+    h: 80,
+    speed: 100,
+    pause: 700,
+    pingPong: true,
+    waypoints: [{ x: 50, y: 50 }, { x: 150, y: 50 }],
+  };
+  assert.equal(getMovingZoneRect(zone, 500).centerX, 100);
+  assert.equal(getMovingZoneRect(zone, 1100).centerX, 150);
+  assert.equal(getMovingZoneRect(zone, 1600).centerX, 150);
+  assert.ok(getMovingZoneRect(zone, 2200).centerX < 150);
+});
+
+test('activates staged cards and recovers alert inside cat fog', () => {
+  const mover = {
+    requiresSwitches: ['moon'],
+    disabledBySwitches: ['sun'],
+  };
+  assert.equal(isMoverActive(mover, new Set()), false);
+  assert.equal(isMoverActive(mover, new Set(['moon'])), true);
+  assert.equal(isMoverActive(mover, new Set(['moon', 'sun'])), false);
+  assert.equal(updateStealthAlert(0, false, 600, { alertDuration: 1200 }), 0.5);
+  assert.equal(
+    updateStealthAlert(0.5, true, 300, {
+      alertDuration: 1200,
+      recoveryMultiplier: 2,
+    }),
+    0,
+  );
 });
 
 test('uses hysteresis at mirror-zone edges and exposes zone effects', () => {
@@ -286,7 +324,7 @@ test('uses hysteresis at mirror-zone edges and exposes zone effects', () => {
   const exited = updateMirrorZoneMembership({ x: 95, y: 150 }, zones, retained);
   assert.equal(exited.has('veil'), false);
   const effects = getMirrorZoneEffects(getActiveMirrorZones(zones, entered));
-  assert.deepEqual(effects, { echo: false, vanish: true, invertX: false });
+  assert.deepEqual(effects, { vanish: true, invertX: false });
 });
 
 test('checks collected items, switches, and name fragments', () => {

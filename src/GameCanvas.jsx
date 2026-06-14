@@ -9,7 +9,9 @@ import {
   canScoreLinkedHoop,
   circleRectCollision,
   generateFallCourse,
+  getEchoReplayPosition,
   getMoverRect,
+  getMovingZoneRect,
   getActiveFallPlatforms,
   getActiveMirrorZones,
   getMirrorZoneEffects,
@@ -18,6 +20,9 @@ import {
   isBumperEnabled,
   isItemAvailable,
   isMirrorControlActive,
+  isMoverActive,
+  isSimultaneousGroupOccupied,
+  isTriggerOccupied,
   makeBall,
   overlapsItem,
   pointInRect,
@@ -28,6 +33,7 @@ import {
   updateMirrorZoneMembership,
   updateBall,
   updateFallPlayer,
+  updateStealthAlert,
 } from './gameEngine';
 
 function roundedRect(ctx, x, y, w, h, radius) {
@@ -90,11 +96,29 @@ function drawZone(ctx, zone, time) {
       gradient.addColorStop(0.5, 'rgba(204, 189, 225, .2)');
       gradient.addColorStop(1, 'rgba(59, 91, 129, .1)');
       ctx.fillStyle = gradient;
-      ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
+      if (zone.shape === 'ellipse') {
+        ctx.beginPath();
+        ctx.ellipse(
+          zone.x + zone.w / 2,
+          zone.y + zone.h / 2,
+          zone.w / 2,
+          zone.h / 2,
+          0,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(226, 215, 244, .38)';
+        ctx.stroke();
+      } else {
+        ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
+      }
       ctx.strokeStyle = 'rgba(224, 215, 240, .58)';
       ctx.lineWidth = 1.6;
-      for (let index = 0; index < 4; index += 1) {
-        const x = zone.x + 48 + index * 72 + Math.sin(time / 600 + index) * 7;
+      const grinCount = zone.shape === 'ellipse' ? 2 : 4;
+      for (let index = 0; index < grinCount; index += 1) {
+        const spacing = zone.w / (grinCount + 1);
+        const x = zone.x + spacing * (index + 1) + Math.sin(time / 600 + index) * 7;
         const y = zone.y + zone.h / 2 + Math.cos(time / 520 + index) * 8;
         ctx.beginPath();
         ctx.arc(x, y, 12, 0.15 * Math.PI, 0.85 * Math.PI);
@@ -511,6 +535,44 @@ function drawSwitch(ctx, item, active, time, art) {
     ctx.restore();
     return;
   }
+  if (item.triggerSource) {
+    const correct = item.occupiedByCorrect;
+    const wrong = item.occupiedByWrong;
+    ctx.shadowColor = active
+      ? '#f3cf80'
+      : correct
+        ? '#b9d9ef'
+        : wrong
+          ? '#d77b91'
+          : 'rgba(161, 145, 190, .4)';
+    ctx.shadowBlur = active || correct || wrong ? 15 : 7;
+    ctx.fillStyle = active
+      ? '#c9a85d'
+      : item.triggerSource === 'echo'
+        ? 'rgba(101, 126, 164, .72)'
+        : 'rgba(87, 73, 105, .88)';
+    ctx.strokeStyle = active
+      ? '#fae1a1'
+      : wrong
+        ? '#e39aab'
+        : item.triggerSource === 'echo'
+          ? '#c5dded'
+          : '#bcaed0';
+    ctx.lineWidth = correct || wrong ? 3 : 2;
+    if (item.triggerSource === 'echo' && !active) ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(0, active ? 3 : 0, item.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = active ? '#fff2c6' : '#eee5f5';
+    ctx.font = `bold ${Math.max(10, item.r * 0.52)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(item.glyph || (item.triggerSource === 'echo' ? '过去' : '现在'), 0, active ? 4 : 1);
+    ctx.restore();
+    return;
+  }
   if (item.activationMode === 'repeatable') {
     const stateCount = Math.max(2, item.stateCount || 2);
     const currentState = item.currentState || 0;
@@ -913,6 +975,60 @@ function drawPlayer(ctx, player, avatar, time, visualEffects) {
     ctx.stroke();
     ctx.restore();
   }
+}
+
+function drawEchoReplay(ctx, echo, avatar, time, delay) {
+  if (!echo) return;
+  ctx.save();
+  ctx.globalAlpha = 0.34 + Math.sin(time / 220) * 0.04;
+  ctx.strokeStyle = '#c8e4f2';
+  ctx.fillStyle = 'rgba(144, 188, 220, .2)';
+  ctx.shadowColor = '#9fcce5';
+  ctx.shadowBlur = 16;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.arc(echo.x, echo.y, 14, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.arc(echo.x, echo.y, 12.5, 0, Math.PI * 2);
+  ctx.clip();
+  if (avatar?.complete) {
+    ctx.drawImage(avatar, echo.x - 14, echo.y - 14, 28, 28);
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(224, 235, 248, .76)';
+  ctx.font = '9px Georgia';
+  ctx.textAlign = 'center';
+  ctx.fillText(`−${(delay / 1000).toFixed(1)}s`, echo.x, echo.y - 20);
+  ctx.restore();
+}
+
+function drawStealthHud(ctx, alert, hidden) {
+  ctx.save();
+  const centerX = 330;
+  const centerY = 30;
+  ctx.fillStyle = 'rgba(9, 14, 25, .72)';
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, 21, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = hidden ? '#bfa8dc' : alert > 0.66 ? '#e07f91' : '#d8c696';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, 17, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * alert);
+  ctx.stroke();
+  ctx.fillStyle = hidden ? '#c7b5e4' : '#eadfbe';
+  ctx.beginPath();
+  ctx.ellipse(centerX, centerY, 10, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = hidden ? '#5d4776' : alert > 0.66 ? '#a52f47' : '#493b48';
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, hidden ? 2 : 3.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawFallPlatform(ctx, platform, breakingAt, time) {
@@ -1427,7 +1543,11 @@ function MazeGameCanvas({
       immunityUntil: 0,
       activeMirrorZoneIds: new Set(),
       seenMirrorZoneIds: new Set(),
-      inputHistory: [],
+      positionHistory: [],
+      echoPosition: null,
+      echoHoldStarted: null,
+      zoneActivatedAt: new Map(),
+      stealthAlert: 0,
       particles: [],
       shakeUntil: 0,
       startedAt: performance.now(),
@@ -1437,7 +1557,11 @@ function MazeGameCanvas({
   }, [level, resetToken]);
 
   useEffect(() => {
-    if (stateRef.current) stateRef.current.inputHistory = [];
+    if (stateRef.current) {
+      stateRef.current.positionHistory = [];
+      stateRef.current.echoPosition = null;
+      stateRef.current.echoHoldStarted = null;
+    }
   }, [controlMode]);
 
   useEffect(() => {
@@ -1461,8 +1585,20 @@ function MazeGameCanvas({
       state.shakeUntil = time + 260;
       spawnBurst(state, state.player.x, state.player.y, '#d989a6', 16);
       resetBall(state.player, state.checkpoint);
-      state.inputHistory = [];
+      state.positionHistory = [];
+      state.echoPosition = null;
+      state.echoHoldStarted = null;
+      state.stealthAlert = 0;
       state.activeMirrorZoneIds = new Set();
+      for (const zone of level.zones || []) {
+        if (
+          zone.activationSwitch &&
+          state.switches.has(zone.activationSwitch) &&
+          !(zone.disabledBySwitches || []).some((id) => state.switches.has(id))
+        ) {
+          state.zoneActivatedAt.set(zone.id, time);
+        }
+      }
       callbacksRef.current.onDeath(reason);
     };
 
@@ -1471,7 +1607,23 @@ function MazeGameCanvas({
       const dt = time - previous;
       previous = time;
       const moverTime = state && time < state.moversFrozenUntil ? state.moversFrozenAt : time;
-      const movers = (level.movers || []).map((mover) => getMoverRect(mover, moverTime));
+      const movers = state
+        ? (level.movers || [])
+            .filter((mover) => isMoverActive(mover, state.switches))
+            .map((mover) => getMoverRect(mover, moverTime))
+        : [];
+      const resolvedZones = state
+        ? (level.zones || [])
+            .filter((zone) => (
+              (!zone.activationSwitch || state.switches.has(zone.activationSwitch)) &&
+              !(zone.disabledBySwitches || []).some((id) => state.switches.has(id))
+            ))
+            .map((zone) => (
+              zone.waypoints
+                ? getMovingZoneRect(zone, time - (state.zoneActivatedAt.get(zone.id) || time))
+                : zone
+            ))
+        : [];
       const activeGates = state ? getActiveGates(level, state.switches) : [];
       const rotatorWalls = state
         ? (level.rotators || []).flatMap((rotator) => (
@@ -1494,10 +1646,10 @@ function MazeGameCanvas({
       if (state && !paused && !state.complete) {
         const nextMirrorZoneIds = updateMirrorZoneMembership(
           state.player,
-          level.zones,
+          resolvedZones,
           state.activeMirrorZoneIds,
         );
-        const enteredMirrorZones = getActiveMirrorZones(level.zones, nextMirrorZoneIds)
+        const enteredMirrorZones = getActiveMirrorZones(resolvedZones, nextMirrorZoneIds)
           .filter((zone) => !state.activeMirrorZoneIds.has(zone.id));
         for (const zone of enteredMirrorZones) {
           const firstEntry = !state.seenMirrorZoneIds.has(zone.id);
@@ -1506,23 +1658,19 @@ function MazeGameCanvas({
         }
         state.activeMirrorZoneIds = nextMirrorZoneIds;
         const activeMirrorZones = getActiveMirrorZones(
-          level.zones,
+          resolvedZones,
           state.activeMirrorZoneIds,
         );
         const mirrorZoneEffects = getMirrorZoneEffects(activeMirrorZones);
         const currentZones = (level.zones || []).filter((zone) => zone.type === 'current' && pointInRect(state.player, zone));
         const onIce = (level.zones || []).some((zone) => zone.type === 'ice' && pointInRect(state.player, zone));
         const input = gravityRef.current || { x: 0, y: 0 };
-        state.inputHistory.push({ time, x: input.x, y: input.y });
-        while (state.inputHistory[0]?.time < time - 550) state.inputHistory.shift();
         const bumperFlight = time < state.bumperFlightUntil;
         const transformedInput = transformControlInput(
           input,
           level.mirrorControls,
           state,
           activeMirrorZones,
-          state.inputHistory,
-          time,
         );
         const gravity = {
           x: bumperFlight
@@ -1548,6 +1696,24 @@ function MazeGameCanvas({
           friction: bumperFlight ? 0.998 : onIce ? 0.996 : 0.982,
           maxSpeed: bumperFlight ? 6.2 : onIce ? 5.8 : 4.8,
         });
+        if (level.echoReplay) {
+          state.positionHistory.push({
+            time,
+            x: state.player.x,
+            y: state.player.y,
+          });
+          while (
+            state.positionHistory[0]?.time <
+            time - (level.echoReplay.historyDuration ?? 2500)
+          ) {
+            state.positionHistory.shift();
+          }
+          state.echoPosition = getEchoReplayPosition(
+            state.positionHistory,
+            time,
+            level.echoReplay,
+          );
+        }
 
         if (state.lastBumperId && time > state.bumperLinkUntil) {
           state.lastBumperId = null;
@@ -1638,13 +1804,46 @@ function MazeGameCanvas({
 
         const touchingSwitches = new Set(
           (level.switches || [])
-            .filter((trigger) => trigger.action !== 'hoop' && overlapsItem(state.player, trigger))
+            .filter((trigger) => (
+              trigger.action !== 'hoop' &&
+              !trigger.triggerSource &&
+              overlapsItem(state.player, trigger)
+            ))
             .map((trigger) => trigger.id),
         );
         for (const trigger of level.switches || []) {
+          if (trigger.triggerSource) continue;
           if (!touchingSwitches.has(trigger.id) || state.touchingSwitches.has(trigger.id)) continue;
           if (trigger.minRadius && state.player.radius < trigger.minRadius) continue;
           if (trigger.maxRadius && state.player.radius > trigger.maxRadius) continue;
+          if (
+            (trigger.requiresItems || []).some((id) => !state.collected.has(id))
+          ) {
+            callbacksRef.current.onSwitch({
+              ...trigger,
+              sequenceStatus: 'missing-items',
+              activeIds: [...state.switches],
+            });
+            continue;
+          }
+          if (trigger.action === 'stealthStage') {
+            if (!canTriggerSwitch(trigger, state.switches)) continue;
+            state.switches.add(trigger.id);
+            state.stealthAlert = 0;
+            if (trigger.checkpoint) {
+              state.checkpoint = { x: trigger.x, y: trigger.y };
+            }
+            if (trigger.activatesZone) {
+              state.zoneActivatedAt.set(trigger.activatesZone, time);
+            }
+            spawnBurst(state, trigger.x, trigger.y, '#c7b5e4', 16);
+            callbacksRef.current.onSwitch({
+              ...trigger,
+              stealthStage: true,
+              activeIds: [...state.switches],
+            });
+            continue;
+          }
           if (trigger.action === 'rotate') {
             if (!canTriggerSwitch(trigger, state.switches)) continue;
             const rotator = (level.rotators || []).find((entry) => entry.id === trigger.target);
@@ -1749,6 +1948,52 @@ function MazeGameCanvas({
         }
         state.touchingSwitches = touchingSwitches;
 
+        const identityGroups = new Map();
+        for (const trigger of level.switches || []) {
+          if (!trigger.simultaneousGroup) continue;
+          const group = identityGroups.get(trigger.simultaneousGroup) || [];
+          group.push(trigger);
+          identityGroups.set(trigger.simultaneousGroup, group);
+        }
+        for (const triggers of identityGroups.values()) {
+          if (triggers.every((trigger) => state.switches.has(trigger.id))) continue;
+          const occupied = isSimultaneousGroupOccupied(
+            triggers,
+            state.player,
+            state.echoPosition,
+          );
+          if (!occupied) {
+            state.echoHoldStarted = null;
+            continue;
+          }
+          if (state.echoHoldStarted === null) state.echoHoldStarted = time;
+          if (time - state.echoHoldStarted < (level.echoReplay?.holdDuration ?? 250)) continue;
+          for (const trigger of triggers) state.switches.add(trigger.id);
+          state.echoHoldStarted = null;
+          state.shakeUntil = time + 140;
+          spawnBurst(state, state.player.x, state.player.y, '#c8e4f2', 18);
+          callbacksRef.current.onSwitch({
+            ...triggers[0],
+            sequenceStatus: 'identity-complete',
+            activeIds: [...state.switches],
+          });
+        }
+
+        const movingFogActive = resolvedZones.some(
+          (zone) => zone.waypoints && zone.effect === 'vanish',
+        );
+        if (level.stealthConfig && movingFogActive) {
+          state.stealthAlert = updateStealthAlert(
+            state.stealthAlert,
+            mirrorZoneEffects.vanish,
+            dt,
+            level.stealthConfig,
+          );
+          if (state.stealthAlert >= 1) die(state, 'alert', time);
+        } else {
+          state.stealthAlert = 0;
+        }
+
         if (time > state.portalCooldown) {
           const portal = (level.portals || []).find((entry) => overlapsItem(state.player, entry));
           if (portal) {
@@ -1805,7 +2050,7 @@ function MazeGameCanvas({
       if (state && isMirrorControlActive(level.mirrorControls, state)) {
         drawMirrorVeil(ctx, time);
       }
-      (level.zones || []).forEach((zone) => drawZone(ctx, zone, time));
+      resolvedZones.forEach((zone) => drawZone(ctx, zone, time));
       (level.decorations || []).forEach((decoration) => drawDecoration(ctx, decoration, artRef.current, time));
       level.walls.forEach((wall, index) => drawWall(ctx, wall, index));
       activeGates.forEach((gate) => drawGate(ctx, gate, false));
@@ -1859,6 +2104,17 @@ function MazeGameCanvas({
             currentPhase: item.action === 'phase' ? currentState : undefined,
             currentState,
             stateCount: phase?.wallsByState.length || rotator?.states || 2,
+            occupiedByCorrect: item.triggerSource
+              ? isTriggerOccupied(item, state.player, state.echoPosition)
+              : false,
+            occupiedByWrong: item.triggerSource === 'echo'
+              ? overlapsItem(state.player, item)
+              : item.triggerSource === 'player'
+                ? Boolean(state.echoPosition && overlapsItem(
+                    { ...state.echoPosition, radius: state.player.radius },
+                    item,
+                  ))
+                : false,
           }, active, time, artRef.current);
         });
         for (const item of level.items || []) {
@@ -1867,16 +2123,26 @@ function MazeGameCanvas({
           }
         }
         const activeMirrorZones = getActiveMirrorZones(
-          level.zones,
+          resolvedZones,
           state.activeMirrorZoneIds,
         );
         const effects = getMirrorZoneEffects(activeMirrorZones);
+        drawEchoReplay(
+          ctx,
+          state.echoPosition,
+          artRef.current.avatar,
+          time,
+          level.echoReplay?.delay ?? 2000,
+        );
         drawPlayer(ctx, state.player, artRef.current.avatar, time, {
           mirrored: isMirrorControlActive(level.mirrorControls, state) !== effects.invertX,
-          echo: effects.echo,
+          echo: false,
           vanish: effects.vanish,
         });
         state.particles = drawParticles(ctx, state.particles, dt);
+        if (level.stealthConfig) {
+          drawStealthHud(ctx, state.stealthAlert, effects.vanish);
+        }
       }
       ctx.restore();
 

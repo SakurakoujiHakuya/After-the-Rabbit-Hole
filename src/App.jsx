@@ -649,6 +649,20 @@ export default function App() {
     setActivated(trigger.activeIds || []);
     if (trigger.sequenceStatus === 'needs-bumper') {
       setToast(`这道球门只承认 ${trigger.order} 号火烈鸟击出的球。`);
+    } else if (trigger.sequenceStatus === 'missing-items') {
+      setToast(trigger.id === 'sun-lantern'
+        ? '太阳灯在等月光里的半张微笑。'
+        : '出口月灯在等阳光里的另一半微笑。');
+    } else if (trigger.sequenceStatus === 'identity-complete') {
+      setToast('过去与现在同时回答了“我”。身份之门终于承认了她。');
+    } else if (trigger.stealthStage) {
+      setToast(
+        trigger.id === 'moon-lantern'
+          ? '月光猫雾醒了。跟紧它，别让纸牌看清你。'
+          : trigger.id === 'sun-lantern'
+            ? '太阳接过了猫的微笑，下一团雾开始移动。'
+            : '最后一团月雾正把路送往出口。',
+      );
     } else if (trigger.sequenceStatus === 'wrong-phase') {
       setToast(trigger.wrongPhaseMessage || '这枚棋子属于另一种颜色的世界，先切换棋盘。');
     } else if (trigger.rotationId) {
@@ -706,6 +720,7 @@ export default function App() {
       card: '纸牌卫兵把你送回了玫瑰旁。',
       watch: '怀表追上了你，时间重新开始。',
       hazard: '漩涡把方向揉成了一团。',
+      alert: '纸牌看清了你。柴郡猫把你送回最近的灯笼。',
       spikes: '三颗心都碎了。兔子洞把你送回了最初的落点。',
       top: '洞顶的尖刺耗尽了三颗心。平台重新洗牌。',
       fall: '你坠过了兔子洞的边界，只好从顶部重新寻找落点。',

@@ -17,10 +17,37 @@ export function pointInRect(point, rect) {
   );
 }
 
+export function pointInEllipse(point, ellipse, margin = 0) {
+  const centerX = ellipse.centerX ?? ellipse.x + ellipse.w / 2;
+  const centerY = ellipse.centerY ?? ellipse.y + ellipse.h / 2;
+  const radiusX = Math.max(1, ellipse.w / 2 + margin);
+  const radiusY = Math.max(1, ellipse.h / 2 + margin);
+  return (
+    ((point.x - centerX) / radiusX) ** 2 +
+    ((point.y - centerY) / radiusY) ** 2
+  ) <= 1;
+}
+
 export function overlapsItem(ball, item) {
   const dx = ball.x - item.x;
   const dy = ball.y - item.y;
   return dx * dx + dy * dy < (ball.radius + item.r) ** 2;
+}
+
+export function isTriggerOccupied(trigger, player, echoPosition) {
+  if (trigger.triggerSource === 'echo') {
+    return Boolean(
+      echoPosition &&
+      overlapsItem({ ...echoPosition, radius: player.radius }, trigger),
+    );
+  }
+  return overlapsItem(player, trigger);
+}
+
+export function isSimultaneousGroupOccupied(triggers, player, echoPosition) {
+  return triggers.every((trigger) => (
+    isTriggerOccupied(trigger, player, echoPosition)
+  ));
 }
 
 export function segmentCrossesHoop(from, to, hoop) {
@@ -64,6 +91,12 @@ export function updateMirrorZoneMembership(
   for (const zone of zones || []) {
     if (zone.type !== 'mirror') continue;
     const wasActive = activeIds.has(zone.id);
+    if (zone.shape === 'ellipse') {
+      if (pointInEllipse(point, zone, wasActive ? margin : -margin)) {
+        nextIds.add(zone.id);
+      }
+      continue;
+    }
     const boundary = wasActive
       ? {
           x: zone.x - margin,
@@ -90,23 +123,92 @@ export function getActiveMirrorZones(zones, activeIds) {
 
 export function getMirrorZoneEffects(activeZones) {
   return {
-    echo: activeZones.some((zone) => zone.effect === 'echo'),
     vanish: activeZones.some((zone) => zone.effect === 'vanish'),
     invertX: activeZones.filter((zone) => zone.effect === 'invertX').length % 2 === 1,
   };
 }
 
-export function getDelayedInput(inputHistory, time, delay = 400) {
-  const targetTime = time - delay;
-  for (let index = inputHistory.length - 1; index >= 0; index -= 1) {
-    if (inputHistory[index].time <= targetTime) {
-      return {
-        x: inputHistory[index].x,
-        y: inputHistory[index].y,
-      };
-    }
+export function interpolatePositionHistory(history, targetTime) {
+  if (!history?.length || targetTime < history[0].time) return null;
+  for (let index = 1; index < history.length; index += 1) {
+    const next = history[index];
+    if (next.time < targetTime) continue;
+    const previous = history[index - 1];
+    const duration = Math.max(1, next.time - previous.time);
+    const progress = Math.max(0, Math.min(1, (targetTime - previous.time) / duration));
+    return {
+      x: previous.x + (next.x - previous.x) * progress,
+      y: previous.y + (next.y - previous.y) * progress,
+    };
   }
-  return { x: 0, y: 0 };
+  const last = history[history.length - 1];
+  return { x: last.x, y: last.y };
+}
+
+export function getEchoReplayPosition(history, time, config) {
+  if (!config) return null;
+  return interpolatePositionHistory(history, time - (config.delay ?? 2000));
+}
+
+export function getMovingZoneRect(zone, elapsed = 0) {
+  const points = zone.waypoints || [];
+  if (points.length === 0) return { ...zone };
+  if (points.length === 1) {
+    return {
+      ...zone,
+      centerX: points[0].x,
+      centerY: points[0].y,
+      x: points[0].x - zone.w / 2,
+      y: points[0].y - zone.h / 2,
+    };
+  }
+  const route = zone.pingPong
+    ? [...points, ...points.slice(1, -1).reverse()]
+    : points;
+  const speed = zone.speed ?? 42;
+  const pause = zone.pause ?? 700;
+  const legs = route.map((from, index) => {
+    const to = route[(index + 1) % route.length];
+    const moveDuration = (Math.hypot(to.x - from.x, to.y - from.y) / speed) * 1000;
+    return { from, to, moveDuration, duration: moveDuration + pause };
+  });
+  const cycleDuration = legs.reduce((sum, leg) => sum + leg.duration, 0);
+  let cursor = cycleDuration ? ((elapsed % cycleDuration) + cycleDuration) % cycleDuration : 0;
+  let center = route[0];
+  for (const leg of legs) {
+    if (cursor <= leg.duration) {
+      const progress = Math.min(1, cursor / Math.max(1, leg.moveDuration));
+      center = {
+        x: leg.from.x + (leg.to.x - leg.from.x) * progress,
+        y: leg.from.y + (leg.to.y - leg.from.y) * progress,
+      };
+      break;
+    }
+    cursor -= leg.duration;
+  }
+  return {
+    ...zone,
+    centerX: center.x,
+    centerY: center.y,
+    x: center.x - zone.w / 2,
+    y: center.y - zone.h / 2,
+  };
+}
+
+export function isMoverActive(mover, switches) {
+  const hasRequired = (mover.requiresSwitches || []).every((id) => switches.has(id));
+  const hasDisabled = (mover.disabledBySwitches || []).some((id) => switches.has(id));
+  return hasRequired && !hasDisabled;
+}
+
+export function updateStealthAlert(current, hidden, dt, config = {}) {
+  const duration = config.alertDuration ?? 1200;
+  const recoveryMultiplier = config.recoveryMultiplier ?? 2;
+  const delta = dt / duration;
+  return Math.max(
+    0,
+    Math.min(1, current + (hidden ? -delta * recoveryMultiplier : delta)),
+  );
 }
 
 export function transformControlInput(
@@ -114,28 +216,12 @@ export function transformControlInput(
   mirrorConfig,
   state,
   activeZones = [],
-  inputHistory = [],
-  time = 0,
 ) {
-  const echoZone = activeZones.find((zone) => zone.effect === 'echo');
-  const delayedInput = echoZone
-    ? getDelayedInput(inputHistory, time, echoZone.delay ?? 400)
-    : { x: 0, y: 0 };
-  const echoStrength = echoZone?.strength ?? 0;
-  let x = input.x + delayedInput.x * echoStrength;
-  let y = input.y + delayedInput.y * echoStrength;
-  const maxMagnitude = echoZone?.maxMagnitude ?? 1.75;
-  const magnitude = Math.hypot(x, y);
-  if (magnitude > maxMagnitude) {
-    x = (x / magnitude) * maxMagnitude;
-    y = (y / magnitude) * maxMagnitude;
-  }
   const effects = getMirrorZoneEffects(activeZones);
   const invertX = isMirrorControlActive(mirrorConfig, state) !== effects.invertX;
   return {
     ...input,
-    x: x * (invertX ? -1 : 1),
-    y,
+    x: input.x * (invertX ? -1 : 1),
   };
 }
 

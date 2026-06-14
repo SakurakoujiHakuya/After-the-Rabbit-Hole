@@ -288,6 +288,7 @@ function solveLevel(level) {
       if (!isReachable(trigger)) continue;
       if (trigger.minRadius && state.radius < trigger.minRadius) continue;
       if (trigger.maxRadius && state.radius > trigger.maxRadius) continue;
+      if ((trigger.requiresItems || []).some((id) => !state.collected.has(id))) continue;
       if (
         level.switchSequence?.length &&
         state.sequenceIndex < level.switchSequence.length &&
@@ -474,8 +475,8 @@ test('turns the looking-glass chapter into a reversible global mirror puzzle', (
   assert.equal(level.phases[0].wallsByState.length, 3);
 });
 
-test('gives every local mirror zone a distinct playable effect', () => {
-  const validEffects = new Set(['echo', 'vanish', 'invertX']);
+test('gives every local mirror zone a playable effect', () => {
+  const validEffects = new Set(['vanish', 'invertX']);
   const mirrorZones = levels.flatMap((level) => (
     (level.zones || [])
       .filter((zone) => zone.type === 'mirror')
@@ -494,11 +495,67 @@ test('gives every local mirror zone a distinct playable effect', () => {
     assert.ok(zone.enterMessage, `${level.id} ${zone.id} needs an enter message`);
     assert.ok(zone.reenterMessage, `${level.id} ${zone.id} needs a re-entry message`);
   }
-  assert.equal(levelById['caterpillar-crossroad'].zones[0].effect, 'echo');
+  assert.equal(levelById['caterpillar-crossroad'].zones?.length || 0, 0);
+  assert.deepEqual(levelById['caterpillar-crossroad'].echoReplay, {
+    delay: 2000,
+    historyDuration: 2500,
+    holdDuration: 250,
+  });
   assert.ok(
     levelById['cheshire-wood'].zones.every((zone) => zone.effect === 'vanish'),
   );
   assert.equal(levelById['trial-of-names'].zones[0].effect, 'invertX');
+});
+
+test('builds the caterpillar identity puzzle around two source-specific seals', () => {
+  const level = levelById['caterpillar-crossroad'];
+  const identitySwitches = level.switches.filter((trigger) => trigger.simultaneousGroup);
+  assert.deepEqual(
+    identitySwitches.map((trigger) => trigger.triggerSource).sort(),
+    ['echo', 'player'],
+  );
+  assert.ok(identitySwitches.every((trigger) => trigger.simultaneousGroup === 'identity-pair'));
+  assert.ok(level.goal.requires.switches.every(
+    (id) => identitySwitches.some((trigger) => trigger.id === id),
+  ));
+  for (const trigger of identitySwitches) {
+    assert.equal(canReach(level, {}, trigger), true);
+  }
+});
+
+test('builds three ordered cheshire fog escorts with staged card groups', () => {
+  const level = levelById['cheshire-wood'];
+  assert.deepEqual(level.stealthRoute, [
+    'moon-lantern',
+    'moon-smile',
+    'sun-lantern',
+    'sun-smile',
+    'exit-lantern',
+    'goal',
+  ]);
+  assert.equal(level.zones.length, 3);
+  assert.equal(level.movers.length, 9);
+  assert.ok(level.zones.every((zone) => (
+    zone.effect === 'vanish' &&
+    zone.shape === 'ellipse' &&
+    zone.pingPong &&
+    zone.waypoints.length >= 3
+  )));
+  const moon = level.switches.find((trigger) => trigger.id === 'moon-lantern');
+  const sun = level.switches.find((trigger) => trigger.id === 'sun-lantern');
+  const exit = level.switches.find((trigger) => trigger.id === 'exit-lantern');
+  assert.deepEqual(sun.requiresItems, ['moon-smile']);
+  assert.deepEqual(exit.requiresItems, ['sun-smile']);
+  assert.ok([moon, sun, exit].every((trigger) => trigger.checkpoint));
+  assert.equal(level.movers.filter((mover) => (
+    mover.requiresSwitches.includes('moon-lantern')
+  )).length, 3);
+  assert.equal(level.movers.filter((mover) => (
+    mover.requiresSwitches.includes('sun-lantern')
+  )).length, 3);
+  assert.equal(level.movers.filter((mover) => (
+    mover.requiresSwitches.includes('exit-lantern')
+  )).length, 3);
 });
 
 test('keeps full interaction radii outside static and dynamic walls', () => {
