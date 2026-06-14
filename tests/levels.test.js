@@ -473,6 +473,33 @@ test('turns the looking-glass chapter into a reversible global mirror puzzle', (
   assert.equal(level.phases[0].wallsByState.length, 3);
 });
 
+test('gives every local mirror zone a distinct playable effect', () => {
+  const validEffects = new Set(['echo', 'vanish', 'invertX']);
+  const mirrorZones = levels.flatMap((level) => (
+    (level.zones || [])
+      .filter((zone) => zone.type === 'mirror')
+      .map((zone) => ({ level, zone }))
+  ));
+  const ids = new Set();
+  assert.equal(mirrorZones.length, 4);
+  for (const { level, zone } of mirrorZones) {
+    assert.ok(zone.id, `${level.id} has an unnamed mirror zone`);
+    assert.equal(ids.has(zone.id), false, `${zone.id} is reused`);
+    ids.add(zone.id);
+    assert.ok(
+      validEffects.has(zone.effect),
+      `${level.id} ${zone.id} has no playable mirror effect`,
+    );
+    assert.ok(zone.enterMessage, `${level.id} ${zone.id} needs an enter message`);
+    assert.ok(zone.reenterMessage, `${level.id} ${zone.id} needs a re-entry message`);
+  }
+  assert.equal(levelById['caterpillar-crossroad'].zones[0].effect, 'echo');
+  assert.ok(
+    levelById['cheshire-wood'].zones.every((zone) => zone.effect === 'vanish'),
+  );
+  assert.equal(levelById['trial-of-names'].zones[0].effect, 'invertX');
+});
+
 test('keeps full interaction radii outside static and dynamic walls', () => {
   for (const level of levels) {
     const points = [

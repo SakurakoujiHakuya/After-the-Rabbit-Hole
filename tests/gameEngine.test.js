@@ -7,6 +7,8 @@ import {
   canTriggerSwitch,
   circleRectCollision,
   getMoverRect,
+  getActiveMirrorZones,
+  getMirrorZoneEffects,
   getPhaseWalls,
   getRotatorWalls,
   isBumperEnabled,
@@ -17,6 +19,7 @@ import {
   rotateRect,
   segmentCrossesHoop,
   transformControlInput,
+  updateMirrorZoneMembership,
   updateBall,
 } from '../src/gameEngine.js';
 
@@ -113,6 +116,80 @@ test('keeps global mirror controls active until the orientation lens is collecte
     { x: 1, y: -0.5 },
   );
   assert.equal(isMirrorControlActive(null, state), false);
+});
+
+test('combines global and local mirror inversion with xor semantics', () => {
+  const state = { collected: new Set() };
+  const localMirror = [{ effect: 'invertX' }];
+  assert.deepEqual(
+    transformControlInput(
+      { x: 1, y: -0.5 },
+      { invertX: true },
+      state,
+      localMirror,
+    ),
+    { x: 1, y: -0.5 },
+  );
+  assert.deepEqual(
+    transformControlInput({ x: 1, y: -0.5 }, null, state, localMirror),
+    { x: -1, y: -0.5 },
+  );
+});
+
+test('adds a bounded delayed echo to control input', () => {
+  const history = [
+    { time: 100, x: 1, y: 0 },
+    { time: 450, x: 0, y: 1 },
+    { time: 500, x: 0, y: 1 },
+  ];
+  const echoZone = [{
+    effect: 'echo',
+    delay: 400,
+    strength: 0.28,
+    maxMagnitude: 1.75,
+  }];
+  assert.deepEqual(
+    transformControlInput(
+      { x: 0, y: 1 },
+      null,
+      { collected: new Set() },
+      echoZone,
+      history,
+      500,
+    ),
+    { x: 0.28, y: 1 },
+  );
+  const bounded = transformControlInput(
+    { x: 2, y: 2 },
+    null,
+    { collected: new Set() },
+    echoZone,
+    [{ time: 100, x: 2, y: 2 }],
+    500,
+  );
+  assert.ok(Math.hypot(bounded.x, bounded.y) <= 1.75 + Number.EPSILON);
+});
+
+test('uses hysteresis at mirror-zone edges and exposes zone effects', () => {
+  const zones = [{
+    id: 'veil',
+    type: 'mirror',
+    effect: 'vanish',
+    x: 100,
+    y: 100,
+    w: 100,
+    h: 100,
+  }];
+  const outsideEdge = updateMirrorZoneMembership({ x: 102, y: 150 }, zones);
+  assert.equal(outsideEdge.has('veil'), false);
+  const entered = updateMirrorZoneMembership({ x: 105, y: 150 }, zones);
+  assert.equal(entered.has('veil'), true);
+  const retained = updateMirrorZoneMembership({ x: 98, y: 150 }, zones, entered);
+  assert.equal(retained.has('veil'), true);
+  const exited = updateMirrorZoneMembership({ x: 95, y: 150 }, zones, retained);
+  assert.equal(exited.has('veil'), false);
+  const effects = getMirrorZoneEffects(getActiveMirrorZones(zones, entered));
+  assert.deepEqual(effects, { echo: false, vanish: true, invertX: false });
 });
 
 test('checks collected items, switches, and name fragments', () => {

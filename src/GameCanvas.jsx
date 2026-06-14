@@ -8,6 +8,8 @@ import {
   canScoreLinkedHoop,
   circleRectCollision,
   getMoverRect,
+  getActiveMirrorZones,
+  getMirrorZoneEffects,
   getPhaseWalls,
   getRotatorWalls,
   isBumperEnabled,
@@ -20,6 +22,7 @@ import {
   resetBall,
   segmentCrossesHoop,
   transformControlInput,
+  updateMirrorZoneMembership,
   updateBall,
 } from './gameEngine';
 
@@ -61,18 +64,67 @@ function drawPaper(ctx, gardenImage) {
 function drawZone(ctx, zone, time) {
   ctx.save();
   if (zone.type === 'mirror') {
-    const gradient = ctx.createLinearGradient(zone.x, zone.y, zone.x + zone.w, zone.y + zone.h);
-    gradient.addColorStop(0, 'rgba(160, 187, 222, .2)');
-    gradient.addColorStop(0.5, 'rgba(237, 226, 244, .1)');
-    gradient.addColorStop(1, 'rgba(126, 104, 170, .22)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
-    ctx.strokeStyle = 'rgba(211, 220, 246, .33)';
-    for (let y = zone.y + 14; y < zone.y + zone.h; y += 26) {
-      ctx.beginPath();
-      ctx.moveTo(zone.x, y);
-      ctx.bezierCurveTo(zone.x + zone.w * 0.3, y + Math.sin(time / 350 + y) * 5, zone.x + zone.w * 0.7, y - 4, zone.x + zone.w, y);
-      ctx.stroke();
+    const gradient = ctx.createLinearGradient(
+      zone.x,
+      zone.y,
+      zone.x + zone.w,
+      zone.y + zone.h,
+    );
+    if (zone.effect === 'echo') {
+      gradient.addColorStop(0, 'rgba(116, 132, 184, .14)');
+      gradient.addColorStop(0.5, 'rgba(225, 217, 239, .2)');
+      gradient.addColorStop(1, 'rgba(126, 104, 170, .16)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
+      for (let index = 0; index < 4; index += 1) {
+        const offset = 14 + index * 34 + Math.sin(time / 420 + index) * 5;
+        ctx.strokeStyle = `rgba(221, 224, 245, ${0.28 - index * 0.04})`;
+        ctx.strokeRect(zone.x + offset, zone.y + 10, zone.w - offset * 2, zone.h - 20);
+      }
+    } else if (zone.effect === 'vanish') {
+      gradient.addColorStop(0, 'rgba(93, 70, 130, .1)');
+      gradient.addColorStop(0.5, 'rgba(204, 189, 225, .2)');
+      gradient.addColorStop(1, 'rgba(59, 91, 129, .1)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
+      ctx.strokeStyle = 'rgba(224, 215, 240, .58)';
+      ctx.lineWidth = 1.6;
+      for (let index = 0; index < 4; index += 1) {
+        const x = zone.x + 48 + index * 72 + Math.sin(time / 600 + index) * 7;
+        const y = zone.y + zone.h / 2 + Math.cos(time / 520 + index) * 8;
+        ctx.beginPath();
+        ctx.arc(x, y, 12, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.stroke();
+      }
+    } else if (zone.effect === 'invertX') {
+      gradient.addColorStop(0, 'rgba(144, 187, 220, .22)');
+      gradient.addColorStop(0.5, 'rgba(237, 226, 244, .12)');
+      gradient.addColorStop(1, 'rgba(153, 107, 179, .24)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
+      ctx.strokeStyle = 'rgba(225, 232, 250, .52)';
+      ctx.lineWidth = 1.4;
+      ctx.strokeRect(zone.x + 2, zone.y + 2, zone.w - 4, zone.h - 4);
+      ctx.font = '22px Georgia';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(235, 231, 249, .7)';
+      ctx.fillText('‹', zone.x + 24, zone.y + zone.h / 2);
+      ctx.fillText('›', zone.x + zone.w - 24, zone.y + zone.h / 2);
+      ctx.strokeStyle = 'rgba(211, 220, 246, .35)';
+      for (let y = zone.y + 18; y < zone.y + zone.h; y += 26) {
+        ctx.beginPath();
+        ctx.moveTo(zone.x, y);
+        ctx.bezierCurveTo(
+          zone.x + zone.w * 0.3,
+          y + Math.sin(time / 350 + y) * 5,
+          zone.x + zone.w * 0.7,
+          y - 4,
+          zone.x + zone.w,
+          y,
+        );
+        ctx.stroke();
+      }
     }
   } else if (zone.type === 'current') {
     ctx.fillStyle = 'rgba(73, 139, 181, .17)';
@@ -771,16 +823,39 @@ function drawParticles(ctx, particles, dt) {
   return particles.filter((particle) => particle.life > 0);
 }
 
-function drawPlayer(ctx, player, avatar, time, mirrored) {
+function drawPlayer(ctx, player, avatar, time, visualEffects) {
+  const { mirrored, echo, vanish } = visualEffects;
   player.trail.forEach((point, index) => {
-    const alpha = (1 - index / player.trail.length) * 0.14;
+    const alpha = (1 - index / player.trail.length) * (vanish ? 0.08 : 0.14);
     ctx.fillStyle = mirrored ? `rgba(167, 201, 232, ${alpha})` : `rgba(243, 219, 164, ${alpha})`;
     ctx.beginPath();
     ctx.arc(point.x, point.y, Math.max(2, player.radius - index * 0.55), 0, Math.PI * 2);
     ctx.fill();
   });
 
+  if (echo && avatar?.complete) {
+    for (const [trailIndex, alpha] of [[5, 0.18], [10, 0.1]]) {
+      const point = player.trail[trailIndex];
+      if (!point) continue;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, player.radius, 0, Math.PI * 2);
+      ctx.clip();
+      const avatarSize = player.radius * 2.18;
+      ctx.drawImage(
+        avatar,
+        point.x - avatarSize / 2,
+        point.y - avatarSize / 2,
+        avatarSize,
+        avatarSize,
+      );
+      ctx.restore();
+    }
+  }
+
   ctx.save();
+  if (vanish) ctx.globalAlpha = 0.26;
   ctx.translate(player.x, player.y);
   const lean = Math.max(-0.18, Math.min(0.18, player.vx * 0.035));
   ctx.rotate(lean);
@@ -816,6 +891,24 @@ function drawPlayer(ctx, player, avatar, time, mirrored) {
   ctx.arc(-player.radius * 0.18, -player.radius * 0.18, player.radius * 0.62, Math.PI * 1.05, Math.PI * 1.55);
   ctx.stroke();
   ctx.restore();
+
+  if (vanish) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(239, 225, 248, .88)';
+    ctx.shadowColor = '#bfa8dc';
+    ctx.shadowBlur = 10;
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.arc(
+      player.x,
+      player.y + player.radius * 0.05,
+      player.radius * 0.58,
+      0.15 * Math.PI,
+      0.85 * Math.PI,
+    );
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 function getActiveGates(level, switches) {
@@ -830,11 +923,13 @@ export default function GameCanvas({
   gravityRef,
   paused,
   resetToken,
+  controlMode,
   onCollect,
   onPaint,
   onBumper,
   onSwitch,
   onGiftUsed,
+  onZoneEnter,
   onDeath,
   onLockedDoor,
   onComplete,
@@ -848,6 +943,7 @@ export default function GameCanvas({
     onBumper,
     onSwitch,
     onGiftUsed,
+    onZoneEnter,
     onDeath,
     onLockedDoor,
     onComplete,
@@ -858,6 +954,7 @@ export default function GameCanvas({
     onBumper,
     onSwitch,
     onGiftUsed,
+    onZoneEnter,
     onDeath,
     onLockedDoor,
     onComplete,
@@ -931,6 +1028,9 @@ export default function GameCanvas({
       moversFrozenAt: 0,
       shields: 0,
       immunityUntil: 0,
+      activeMirrorZoneIds: new Set(),
+      seenMirrorZoneIds: new Set(),
+      inputHistory: [],
       particles: [],
       shakeUntil: 0,
       startedAt: performance.now(),
@@ -938,6 +1038,10 @@ export default function GameCanvas({
       pausedDuration: 0,
     };
   }, [level, resetToken]);
+
+  useEffect(() => {
+    if (stateRef.current) stateRef.current.inputHistory = [];
+  }, [controlMode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -960,6 +1064,8 @@ export default function GameCanvas({
       state.shakeUntil = time + 260;
       spawnBurst(state, state.player.x, state.player.y, '#d989a6', 16);
       resetBall(state.player, state.checkpoint);
+      state.inputHistory = [];
+      state.activeMirrorZoneIds = new Set();
       callbacksRef.current.onDeath(reason);
     };
 
@@ -989,11 +1095,38 @@ export default function GameCanvas({
       }
 
       if (state && !paused && !state.complete) {
+        const nextMirrorZoneIds = updateMirrorZoneMembership(
+          state.player,
+          level.zones,
+          state.activeMirrorZoneIds,
+        );
+        const enteredMirrorZones = getActiveMirrorZones(level.zones, nextMirrorZoneIds)
+          .filter((zone) => !state.activeMirrorZoneIds.has(zone.id));
+        for (const zone of enteredMirrorZones) {
+          const firstEntry = !state.seenMirrorZoneIds.has(zone.id);
+          state.seenMirrorZoneIds.add(zone.id);
+          callbacksRef.current.onZoneEnter?.({ ...zone, firstEntry });
+        }
+        state.activeMirrorZoneIds = nextMirrorZoneIds;
+        const activeMirrorZones = getActiveMirrorZones(
+          level.zones,
+          state.activeMirrorZoneIds,
+        );
+        const mirrorZoneEffects = getMirrorZoneEffects(activeMirrorZones);
         const currentZones = (level.zones || []).filter((zone) => zone.type === 'current' && pointInRect(state.player, zone));
         const onIce = (level.zones || []).some((zone) => zone.type === 'ice' && pointInRect(state.player, zone));
         const input = gravityRef.current || { x: 0, y: 0 };
+        state.inputHistory.push({ time, x: input.x, y: input.y });
+        while (state.inputHistory[0]?.time < time - 550) state.inputHistory.shift();
         const bumperFlight = time < state.bumperFlightUntil;
-        const transformedInput = transformControlInput(input, level.mirrorControls, state);
+        const transformedInput = transformControlInput(
+          input,
+          level.mirrorControls,
+          state,
+          activeMirrorZones,
+          state.inputHistory,
+          time,
+        );
         const gravity = {
           x: bumperFlight
             ? 0
@@ -1233,7 +1366,9 @@ export default function GameCanvas({
         }
 
         const hazard = (level.hazards || []).find((entry) => overlapsItem(state.player, entry));
-        const moverHit = movers.find((entry) => circleRectCollision(state.player, entry));
+        const moverHit = mirrorZoneEffects.vanish
+          ? null
+          : movers.find((entry) => circleRectCollision(state.player, entry));
         if ((hazard || moverHit) && time > state.immunityUntil) {
           if (state.shields > 0) {
             state.shields -= 1;
@@ -1334,10 +1469,16 @@ export default function GameCanvas({
             drawItem(ctx, item, time, artRef.current);
           }
         }
-        const mirrored =
-          isMirrorControlActive(level.mirrorControls, state) ||
-          (level.zones || []).some((zone) => zone.type === 'mirror' && pointInRect(state.player, zone));
-        drawPlayer(ctx, state.player, artRef.current.avatar, time, mirrored);
+        const activeMirrorZones = getActiveMirrorZones(
+          level.zones,
+          state.activeMirrorZoneIds,
+        );
+        const effects = getMirrorZoneEffects(activeMirrorZones);
+        drawPlayer(ctx, state.player, artRef.current.avatar, time, {
+          mirrored: isMirrorControlActive(level.mirrorControls, state) !== effects.invertX,
+          echo: effects.echo,
+          vanish: effects.vanish,
+        });
         state.particles = drawParticles(ctx, state.particles, dt);
       }
       ctx.restore();

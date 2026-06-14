@@ -43,6 +43,34 @@ function MusicButton({ muted, playing, onToggle }) {
   );
 }
 
+function playMirrorZoneCue(effect) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+  const context = new AudioContextClass();
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  const frequencies = {
+    echo: [392, 330],
+    vanish: [523, 659],
+    invertX: [440, 311],
+  };
+  const [startFrequency, endFrequency] = frequencies[effect] || frequencies.echo;
+  oscillator.type = effect === 'vanish' ? 'sine' : 'triangle';
+  oscillator.frequency.setValueAtTime(startFrequency, context.currentTime);
+  oscillator.frequency.exponentialRampToValueAtTime(
+    endFrequency,
+    context.currentTime + 0.32,
+  );
+  gain.gain.setValueAtTime(0.0001, context.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.055, context.currentTime + 0.035);
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.38);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start();
+  oscillator.stop(context.currentTime + 0.4);
+  oscillator.addEventListener('ended', () => context.close());
+}
+
 function StartScreen({ progress, onContinue, onNewGame, onChapters, onHowTo }) {
   const hasProgress = progress.unlocked.length > 1 || Object.keys(progress.completed).length > 0;
   const currentLevel = getLevel(progress.currentLevelId);
@@ -656,6 +684,21 @@ export default function App() {
     if (navigator.vibrate) navigator.vibrate([25, 30, 25]);
   };
 
+  const handleZoneEnter = (zone) => {
+    setToast(zone.firstEntry
+      ? zone.enterMessage
+      : zone.reenterMessage || zone.enterMessage);
+    if (navigator.vibrate) navigator.vibrate(zone.firstEntry ? 24 : 12);
+    if (!musicMuted) playMirrorZoneCue(zone.effect);
+    revealStoryEvent(`zone:${zone.id}`);
+    emitEvent('zone_enter', {
+      levelId: level.id,
+      zoneId: zone.id,
+      effect: zone.effect,
+      firstEntry: zone.firstEntry,
+    });
+  };
+
   const handleDeath = (reason) => {
     setProgress((current) => recordDeath(current, level.id));
     setRunDeaths((count) => count + 1);
@@ -789,11 +832,13 @@ export default function App() {
             gravityRef={gravityRef}
             paused={paused || interlude || storyOpen}
             resetToken={resetToken}
+            controlMode={controlMode}
             onCollect={handleCollect}
             onPaint={handlePaint}
             onBumper={handleBumper}
             onSwitch={handleSwitch}
             onGiftUsed={handleGiftUsed}
+            onZoneEnter={handleZoneEnter}
             onDeath={handleDeath}
             onLockedDoor={() => setToast(level.lockedHint || '门仍在等待缺少的证据。')}
             onComplete={handleComplete}

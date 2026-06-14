@@ -54,10 +54,88 @@ export function isMirrorControlActive(config, state) {
   return !config.releaseItem || !state.collected?.has(config.releaseItem);
 }
 
-export function transformControlInput(input, mirrorConfig, state) {
+export function updateMirrorZoneMembership(
+  point,
+  zones,
+  activeIds = new Set(),
+  margin = 4,
+) {
+  const nextIds = new Set();
+  for (const zone of zones || []) {
+    if (zone.type !== 'mirror') continue;
+    const wasActive = activeIds.has(zone.id);
+    const boundary = wasActive
+      ? {
+          x: zone.x - margin,
+          y: zone.y - margin,
+          w: zone.w + margin * 2,
+          h: zone.h + margin * 2,
+        }
+      : {
+          x: zone.x + margin,
+          y: zone.y + margin,
+          w: Math.max(0, zone.w - margin * 2),
+          h: Math.max(0, zone.h - margin * 2),
+        };
+    if (pointInRect(point, boundary)) nextIds.add(zone.id);
+  }
+  return nextIds;
+}
+
+export function getActiveMirrorZones(zones, activeIds) {
+  return (zones || []).filter(
+    (zone) => zone.type === 'mirror' && activeIds.has(zone.id),
+  );
+}
+
+export function getMirrorZoneEffects(activeZones) {
+  return {
+    echo: activeZones.some((zone) => zone.effect === 'echo'),
+    vanish: activeZones.some((zone) => zone.effect === 'vanish'),
+    invertX: activeZones.filter((zone) => zone.effect === 'invertX').length % 2 === 1,
+  };
+}
+
+export function getDelayedInput(inputHistory, time, delay = 400) {
+  const targetTime = time - delay;
+  for (let index = inputHistory.length - 1; index >= 0; index -= 1) {
+    if (inputHistory[index].time <= targetTime) {
+      return {
+        x: inputHistory[index].x,
+        y: inputHistory[index].y,
+      };
+    }
+  }
+  return { x: 0, y: 0 };
+}
+
+export function transformControlInput(
+  input,
+  mirrorConfig,
+  state,
+  activeZones = [],
+  inputHistory = [],
+  time = 0,
+) {
+  const echoZone = activeZones.find((zone) => zone.effect === 'echo');
+  const delayedInput = echoZone
+    ? getDelayedInput(inputHistory, time, echoZone.delay ?? 400)
+    : { x: 0, y: 0 };
+  const echoStrength = echoZone?.strength ?? 0;
+  let x = input.x + delayedInput.x * echoStrength;
+  let y = input.y + delayedInput.y * echoStrength;
+  const maxMagnitude = echoZone?.maxMagnitude ?? 1.75;
+  const magnitude = Math.hypot(x, y);
+  if (magnitude > maxMagnitude) {
+    x = (x / magnitude) * maxMagnitude;
+    y = (y / magnitude) * maxMagnitude;
+  }
+  const effects = getMirrorZoneEffects(activeZones);
+  const invertX = isMirrorControlActive(mirrorConfig, state) !== effects.invertX;
   return {
     ...input,
-    x: input.x * (isMirrorControlActive(mirrorConfig, state) ? -1 : 1),
+    x: x * (invertX ? -1 : 1),
+    y,
   };
 }
 
