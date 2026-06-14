@@ -84,7 +84,9 @@ const levelList = [
       { id: 'gold-key', type: 'key', x: 292, y: 548, r: 12 },
       { id: 'cameo-hall', type: 'curiosity', x: 302, y: 262, r: 11 },
     ],
-    switches: [{ id: 'rose-seal', x: 58, y: 174, r: 18 }],
+    switches: [
+      { id: 'rose-seal', activationMode: 'once', x: 58, y: 174, r: 18 },
+    ],
     gates: [{ id: 'rose-gate', switchId: 'rose-seal', x: 150, y: 112, w: 34, h: 112 }],
     walls: [
       ...border,
@@ -150,6 +152,7 @@ const levelList = [
     switches: [
       {
         id: 'tiny-latch',
+        activationMode: 'once',
         symbol: '⌑',
         x: 300,
         y: 148,
@@ -271,8 +274,8 @@ const levelList = [
     items: [{ id: 'cameo-crossroad', type: 'curiosity', x: 180, y: 396, r: 11 }],
     zones: [{ type: 'mirror', x: 86, y: 190, w: 188, h: 260 }],
     switches: [
-      { id: 'who-left', x: 55, y: 128, r: 18 },
-      { id: 'who-right', x: 305, y: 128, r: 18 },
+      { id: 'who-left', activationMode: 'once', x: 55, y: 128, r: 18 },
+      { id: 'who-right', activationMode: 'once', x: 305, y: 128, r: 18 },
     ],
     gates: [{ id: 'question-gate', switchId: 'who-left', switchIds: ['who-left', 'who-right'], x: 142, y: 94, w: 76, h: 16 }],
     walls: [
@@ -330,7 +333,16 @@ const levelList = [
       { type: 'mushroom', x: 250, y: 248, size: 62, alpha: 0.5, flip: true },
       { type: 'mushroom', x: 122, y: 72, size: 54, alpha: 0.46 },
     ],
-    switches: [{ id: 'heavy-cap', x: 290, y: 155, r: 20, minRadius: 16 }],
+    switches: [
+      {
+        id: 'heavy-cap',
+        activationMode: 'once',
+        x: 290,
+        y: 155,
+        r: 20,
+        minRadius: 16,
+      },
+    ],
     walls: [
       ...border,
       { x: 18, y: 486, w: 279, h: 18 },
@@ -381,7 +393,7 @@ const levelList = [
     },
     next: ['cheshire-wood'],
     items: [
-      { id: 'watch-hand', type: 'key', x: 60, y: 116, r: 12 },
+      { id: 'watch-hand', type: 'key', x: 180, y: 140, r: 12 },
       { id: 'cameo-tea', type: 'curiosity', x: 286, y: 456, r: 11 },
     ],
     decorations: [
@@ -395,7 +407,7 @@ const levelList = [
         path: 'orbit',
         centerX: 180,
         centerY: 350,
-        radiusX: 112,
+        radiusX: 72,
         radiusY: 42,
         w: 25,
         h: 25,
@@ -406,6 +418,7 @@ const levelList = [
       {
         id: 'tea-crank',
         action: 'rotate',
+        activationMode: 'repeatable',
         target: 'tea-table',
         symbol: '↻',
         x: 292,
@@ -509,14 +522,14 @@ const levelList = [
         choiceAt: 'caterpillar-crossroad',
         choice: 'mushroom',
         items: [
-          { id: 'forest-mushroom-gift', type: 'potion', x: 298, y: 548, r: 13 },
+          { id: 'forest-mushroom-gift', type: 'potion', x: 180, y: 560, r: 13 },
         ],
       },
       {
         choiceAt: 'caterpillar-crossroad',
         choice: 'tea',
         items: [
-          { id: 'forest-watch-gift', type: 'timepiece', x: 298, y: 548, r: 13, duration: 6500 },
+          { id: 'forest-watch-gift', type: 'timepiece', x: 180, y: 560, r: 13, duration: 6500 },
         ],
       },
     ],
@@ -540,7 +553,7 @@ const levelList = [
         requiresPhases: { 'cheshire-light': 0 },
       },
       { id: 'cheshire-checkpoint', type: 'checkpoint', x: 180, y: 356, r: 12 },
-      { id: 'cameo-cheshire', type: 'curiosity', x: 300, y: 72, r: 11 },
+      { id: 'cameo-cheshire', type: 'curiosity', x: 58, y: 72, r: 11 },
     ],
     phases: [
       {
@@ -562,6 +575,7 @@ const levelList = [
       {
         id: 'moon-lantern',
         action: 'phase',
+        activationMode: 'once',
         target: 'cheshire-light',
         phaseTo: 1,
         requiresPhase: 0,
@@ -575,6 +589,7 @@ const levelList = [
       {
         id: 'sun-lantern',
         action: 'phase',
+        activationMode: 'once',
         target: 'cheshire-light',
         phaseTo: 0,
         requiresPhase: 1,
@@ -588,6 +603,7 @@ const levelList = [
       {
         id: 'exit-lantern',
         action: 'phase',
+        activationMode: 'once',
         target: 'cheshire-light',
         phaseTo: 1,
         requiresPhase: 0,
@@ -676,7 +692,7 @@ const levelList = [
       },
     ],
     items: [
-      { id: 'red-paint', type: 'paint', x: 58, y: 548, r: 13 },
+      { id: 'red-paint', type: 'paint', x: 100, y: 568, r: 13 },
       { id: 'cameo-queen', type: 'curiosity', x: 180, y: 452, r: 11 },
     ],
     paintables: [
@@ -689,6 +705,10 @@ const levelList = [
       { id: 'card-2', type: 'card', x: 250, y: 342, w: 54, h: 16, axis: 'x', range: -200, speed: 0.0019, phase: 1.2 },
       { id: 'card-3', type: 'card', x: 50, y: 226, w: 54, h: 16, axis: 'x', range: 220, speed: 0.0022, phase: 2.4 },
       { id: 'card-4', type: 'card', x: 250, y: 112, w: 54, h: 16, axis: 'x', range: -200, speed: 0.0025, phase: 0.5 },
+    ],
+    allowedMoverOverlaps: [
+      ['card-1', 'cameo-queen'],
+      ['card-4', 'queen-rose-3'],
     ],
     walls: [
       ...border,
@@ -743,6 +763,7 @@ const levelList = [
     },
     next: ['card-procession'],
     phaseRoute: [
+      { target: 'orientation-lens', phase: 0 },
       { target: 'mirror-dial', phase: 0 },
       { target: 'left-reflection', phase: 1 },
       { target: 'mirror-dial', phase: 1 },
@@ -765,7 +786,7 @@ const levelList = [
         id: 'left-reflection',
         type: 'mirrorShard',
         label: '左影碎片',
-        x: 58,
+        x: 64,
         y: 160,
         r: 12,
         color: '#a9cfe5',
@@ -775,14 +796,14 @@ const levelList = [
         id: 'right-reflection',
         type: 'mirrorShard',
         label: '右影碎片',
-        x: 300,
+        x: 296,
         y: 160,
         r: 12,
         color: '#d8bce3',
         requiresPhases: { 'mirror-depth': 2 },
       },
       { id: 'mirror-checkpoint', type: 'checkpoint', x: 180, y: 448, r: 12 },
-      { id: 'cameo-mirror', type: 'curiosity', x: 300, y: 72, r: 11 },
+      { id: 'cameo-mirror', type: 'curiosity', x: 58, y: 72, r: 11 },
     ],
     phases: [
       {
@@ -790,15 +811,15 @@ const levelList = [
         initial: 0,
         wallsByState: [
           [
-            { x: 18, y: 400, w: 72, h: 18 },
+            { x: 18, y: 400, w: 100, h: 18 },
           ],
           [
-            { x: 270, y: 400, w: 72, h: 18 },
-            { x: 270, y: 200, w: 72, h: 18 },
+            { x: 242, y: 400, w: 100, h: 18 },
+            { x: 242, y: 200, w: 100, h: 18 },
           ],
           [
-            { x: 18, y: 400, w: 72, h: 18 },
-            { x: 18, y: 200, w: 72, h: 18 },
+            { x: 18, y: 400, w: 100, h: 18 },
+            { x: 18, y: 200, w: 100, h: 18 },
           ],
         ],
       },
@@ -807,8 +828,8 @@ const levelList = [
       {
         id: 'mirror-dial',
         action: 'phase',
+        activationMode: 'repeatable',
         target: 'mirror-depth',
-        repeatable: true,
         phaseStyle: 'mirror',
         phaseGlyphs: ['◐', '◑', '◒'],
         phaseMessages: [
@@ -821,17 +842,17 @@ const levelList = [
         r: 20,
       },
     ],
-    hazards: [{ id: 'mirror-hole', type: 'whirlpool', x: 180, y: 150, r: 18 }],
+    hazards: [{ id: 'mirror-hole', type: 'whirlpool', x: 300, y: 72, r: 18 }],
     walls: [
       ...border,
-      { x: 18, y: 500, w: 124, h: 18 },
-      { x: 218, y: 500, w: 124, h: 18 },
-      { x: 90, y: 400, w: 180, h: 18 },
-      { x: 18, y: 300, w: 124, h: 18 },
-      { x: 218, y: 300, w: 124, h: 18 },
-      { x: 90, y: 200, w: 180, h: 18 },
-      { x: 18, y: 100, w: 124, h: 18 },
-      { x: 218, y: 100, w: 124, h: 18 },
+      { x: 18, y: 500, w: 114, h: 18 },
+      { x: 228, y: 500, w: 114, h: 18 },
+      { x: 118, y: 400, w: 124, h: 18 },
+      { x: 18, y: 300, w: 114, h: 18 },
+      { x: 228, y: 300, w: 114, h: 18 },
+      { x: 118, y: 200, w: 124, h: 18 },
+      { x: 18, y: 100, w: 114, h: 18 },
+      { x: 228, y: 100, w: 114, h: 18 },
     ],
   },
   {
@@ -903,6 +924,7 @@ const levelList = [
       {
         id: 'croquet-hoop-1',
         action: 'hoop',
+        activationMode: 'once',
         order: 1,
         requiresBumper: 'flamingo-1',
         orientation: 'vertical',
@@ -915,18 +937,20 @@ const levelList = [
       {
         id: 'croquet-hoop-2',
         action: 'hoop',
+        activationMode: 'once',
         order: 2,
         requiresBumper: 'flamingo-2',
         orientation: 'vertical',
         direction: -1,
         aperture: 17,
         x: 66,
-        y: 326,
+        y: 342,
         r: 20,
       },
       {
         id: 'croquet-hoop-3',
         action: 'hoop',
+        activationMode: 'once',
         order: 3,
         requiresBumper: 'flamingo-3',
         orientation: 'vertical',
@@ -941,11 +965,11 @@ const levelList = [
       {
         id: 'flamingo-1',
         targetHoopId: 'croquet-hoop-1',
-        x: 86,
+        x: 108,
         y: 548,
         r: 18,
-        impulseX: 5.4,
-        impulseY: -0.74,
+        impulseX: 5.39,
+        impulseY: -0.82,
         flightDuration: 1800,
         artSize: 58,
       },
@@ -956,8 +980,8 @@ const levelList = [
         x: 286,
         y: 354,
         r: 18,
-        impulseX: -5.4,
-        impulseY: -0.7,
+        impulseX: -5.44,
+        impulseY: -0.3,
         flightDuration: 1800,
         artSize: 58,
       },
@@ -1091,16 +1115,25 @@ const levelList = [
       { id: 'cameo-procession', type: 'curiosity', x: 58, y: 72, r: 11 },
     ],
     switches: [
-      { id: 'suit-heart', label: '花色', symbol: '♥', x: 58, y: 548, r: 18 },
-      { id: 'suit-spade', label: '花色', symbol: '♠', x: 58, y: 360, r: 18 },
-      { id: 'suit-diamond', label: '花色', symbol: '♦', x: 300, y: 270, r: 18 },
-      { id: 'suit-club', label: '花色', symbol: '♣', x: 58, y: 174, r: 18 },
+      { id: 'suit-heart', activationMode: 'once', label: '花色', symbol: '♥', x: 58, y: 548, r: 18 },
+      { id: 'suit-spade', activationMode: 'once', label: '花色', symbol: '♠', x: 58, y: 360, r: 18 },
+      { id: 'suit-diamond', activationMode: 'once', label: '花色', symbol: '♦', x: 300, y: 270, r: 18 },
+      { id: 'suit-club', activationMode: 'once', label: '花色', symbol: '♣', x: 58, y: 174, r: 18 },
     ],
     movers: [
       { id: 'parade-card-1', type: 'card', x: 70, y: 448, w: 48, h: 15, axis: 'x', range: 200, speed: 0.0016 },
       { id: 'parade-card-2', type: 'card', x: 250, y: 354, w: 48, h: 15, axis: 'x', range: -190, speed: 0.0019, phase: 1.2 },
       { id: 'parade-card-3', type: 'card', x: 70, y: 260, w: 48, h: 15, axis: 'x', range: 200, speed: 0.0022, phase: 2.2 },
       { id: 'parade-card-4', type: 'card', x: 250, y: 166, w: 48, h: 15, axis: 'x', range: -190, speed: 0.0024, phase: 0.6 },
+    ],
+    allowedMoverOverlaps: [
+      ['parade-card-1', 'procession-ribbon'],
+      ['parade-card-1', 'procession-feather'],
+      ['parade-card-2', 'procession-checkpoint'],
+      ['parade-card-2', 'suit-spade'],
+      ['parade-card-3', 'parade-pass'],
+      ['parade-card-3', 'suit-diamond'],
+      ['parade-card-4', 'suit-club'],
     ],
     walls: [
       ...border,
@@ -1201,14 +1234,14 @@ const levelList = [
         choiceAt: 'queen-garden',
         choice: 'mirror',
         items: [
-          { id: 'mirror-ribbon', type: 'shield', x: 58, y: 488, r: 13, color: '#b9d9ef' },
+          { id: 'mirror-ribbon', type: 'shield', x: 300, y: 488, r: 13, color: '#b9d9ef' },
         ],
       },
       {
         choiceAt: 'queen-garden',
         choice: 'croquet',
         items: [
-          { id: 'flamingo-feather', type: 'shield', x: 58, y: 488, r: 13, color: '#eda6ba' },
+          { id: 'flamingo-feather', type: 'shield', x: 300, y: 488, r: 13, color: '#eda6ba' },
         ],
       },
     ],
@@ -1220,10 +1253,11 @@ const levelList = [
       { id: 'cameo-trial', type: 'curiosity', x: 300, y: 294, r: 11 },
     ],
     switches: [
-      { id: 'verdict', x: 300, y: 170, r: 18 },
+      { id: 'verdict', activationMode: 'once', x: 300, y: 170, r: 18 },
       {
         id: 'court-crank',
         action: 'rotate',
+        activationMode: 'repeatable',
         target: 'court-room',
         symbol: '↻',
         x: 58,
@@ -1261,6 +1295,10 @@ const levelList = [
         speed: 0.0018,
         phase: 0.7,
       },
+    ],
+    allowedMoverOverlaps: [
+      ['jury-1', 'trial-checkpoint'],
+      ['court-clock', 'verdict'],
     ],
     walls: [
       ...border,

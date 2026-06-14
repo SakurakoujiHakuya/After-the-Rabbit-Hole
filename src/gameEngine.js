@@ -216,11 +216,21 @@ export function requirementsMet(requirements, state) {
   return itemReady && switchReady && rotationReady && phaseReady && paintedReady && fragmentReady;
 }
 
+export function canTriggerSwitch(trigger, switches, sequence, sequenceIndex = 0) {
+  if (trigger.activationMode === 'repeatable') return true;
+  if (sequence?.length) return sequenceIndex < sequence.length;
+  return !switches.has(trigger.id);
+}
+
 export function activateSwitch(sequence, switches, sequenceIndex, triggerId) {
   const nextSwitches = new Set(switches);
   if (!sequence?.length) {
     nextSwitches.add(triggerId);
     return { switches: nextSwitches, sequenceIndex, status: 'activated' };
+  }
+
+  if (sequenceIndex >= sequence.length) {
+    return { switches: nextSwitches, sequenceIndex, status: 'complete' };
   }
 
   if (triggerId !== sequence[sequenceIndex]) {

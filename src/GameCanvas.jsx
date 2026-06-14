@@ -4,6 +4,7 @@ import {
   WORLD,
   activateSwitch,
   applyBumperImpulse,
+  canTriggerSwitch,
   canScoreLinkedHoop,
   circleRectCollision,
   getMoverRect,
@@ -453,6 +454,58 @@ function drawSwitch(ctx, item, active, time, art) {
     ctx.fillText(item.order || '', 0, -item.r * 0.02);
     ctx.restore();
     return;
+  }
+  if (item.activationMode === 'repeatable') {
+    const stateCount = Math.max(2, item.stateCount || 2);
+    const currentState = item.currentState || 0;
+    ctx.shadowColor = '#ad9ad2';
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = 'rgba(45, 38, 70, .92)';
+    ctx.strokeStyle = '#c8b8e4';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, item.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(232, 219, 244, .48)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, item.r * 0.72, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let index = 0; index < stateCount; index += 1) {
+      const angle = (index / stateCount) * Math.PI * 2 - Math.PI / 2;
+      const inner = item.r * 0.8;
+      const outer = item.r * 1.04;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+      ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+      ctx.stroke();
+    }
+    const indicatorAngle = (currentState / stateCount) * Math.PI * 2 - Math.PI / 2;
+    ctx.fillStyle = '#f0d890';
+    ctx.beginPath();
+    ctx.arc(
+      Math.cos(indicatorAngle) * item.r * 0.82,
+      Math.sin(indicatorAngle) * item.r * 0.82,
+      2.8,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+    ctx.fillStyle = '#eee4f5';
+    ctx.font = `${Math.max(12, item.r * 0.9)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const symbol = item.action === 'rotate'
+      ? '↻'
+      : item.phaseGlyphs?.[currentState] || item.glyph || '◐';
+    ctx.fillText(symbol, 0, 1);
+    ctx.restore();
+    return;
+  }
+  if (active) {
+    ctx.translate(0, 3);
+    ctx.scale(1, 0.84);
   }
   ctx.fillStyle = active ? '#c9a85d' : '#5e5570';
   ctx.strokeStyle = active ? '#fae1a1' : '#a89cbf';
@@ -1063,11 +1116,13 @@ export default function GameCanvas({
           if (trigger.minRadius && state.player.radius < trigger.minRadius) continue;
           if (trigger.maxRadius && state.player.radius > trigger.maxRadius) continue;
           if (trigger.action === 'rotate') {
+            if (!canTriggerSwitch(trigger, state.switches)) continue;
             const rotator = (level.rotators || []).find((entry) => entry.id === trigger.target);
             if (rotator) {
               const currentTurn = state.rotations.get(rotator.id) || 0;
               const nextTurn = (currentTurn + 1) % (rotator.states || 4);
               state.rotations.set(rotator.id, nextTurn);
+              state.switches.add(trigger.id);
               state.shakeUntil = time + 110;
               spawnBurst(state, rotator.centerX, rotator.centerY, '#e4c67e', 16);
               callbacksRef.current.onSwitch({
@@ -1096,9 +1151,15 @@ export default function GameCanvas({
               });
               continue;
             }
-            if (state.switches.has(trigger.id) && !trigger.repeatable) continue;
+            const repeatable = trigger.activationMode === 'repeatable';
+            if (!canTriggerSwitch(
+              trigger,
+              state.switches,
+              repeatable ? null : level.switchSequence,
+              state.sequenceIndex,
+            )) continue;
             const result = activateSwitch(
-              trigger.repeatable ? null : level.switchSequence,
+              repeatable ? null : level.switchSequence,
               state.switches,
               state.sequenceIndex,
               trigger.id,
@@ -1129,7 +1190,12 @@ export default function GameCanvas({
             }
             continue;
           }
-          if (!level.switchSequence && state.switches.has(trigger.id)) continue;
+          if (!canTriggerSwitch(
+            trigger,
+            state.switches,
+            level.switchSequence,
+            state.sequenceIndex,
+          )) continue;
           const result = activateSwitch(
             level.switchSequence,
             state.switches,
@@ -1242,14 +1308,25 @@ export default function GameCanvas({
         (level.switches || []).forEach((item) => {
           const active = item.action === 'rotate'
             ? (state.rotations.get(item.target) || 0) > 0
-            : item.action === 'phase' && item.repeatable
+            : item.activationMode === 'repeatable'
               ? false
               : state.switches.has(item.id);
+          const phase = item.action === 'phase'
+            ? (level.phases || []).find((entry) => entry.id === item.target)
+            : null;
+          const rotator = item.action === 'rotate'
+            ? (level.rotators || []).find((entry) => entry.id === item.target)
+            : null;
+          const currentState = item.action === 'phase'
+            ? state.phases.get(item.target) || 0
+            : item.action === 'rotate'
+              ? state.rotations.get(item.target) || 0
+              : 0;
           drawSwitch(ctx, {
             ...item,
-            currentPhase: item.action === 'phase'
-              ? state.phases.get(item.target) || 0
-              : undefined,
+            currentPhase: item.action === 'phase' ? currentState : undefined,
+            currentState,
+            stateCount: phase?.wallsByState.length || rotator?.states || 2,
           }, active, time, artRef.current);
         });
         for (const item of level.items || []) {

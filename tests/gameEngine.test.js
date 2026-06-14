@@ -4,6 +4,7 @@ import {
   activateSwitch,
   applyBumperImpulse,
   canScoreLinkedHoop,
+  canTriggerSwitch,
   circleRectCollision,
   getMoverRect,
   getPhaseWalls,
@@ -141,6 +142,41 @@ test('advances and resets an ordered switch puzzle', () => {
   const rose = activateSwitch(sequence, key.switches, key.sequenceIndex, 'rose');
   assert.equal(rose.status, 'complete');
   assert.deepEqual([...rose.switches], sequence);
+
+  const locked = activateSwitch(sequence, rose.switches, rose.sequenceIndex, 'moon');
+  assert.equal(locked.status, 'complete');
+  assert.equal(locked.sequenceIndex, sequence.length);
+  assert.deepEqual([...locked.switches], sequence);
+});
+
+test('distinguishes one-time switches from repeatable controls', () => {
+  const activated = new Set(['seal', 'dial']);
+  assert.equal(
+    canTriggerSwitch({ id: 'seal', activationMode: 'once' }, activated),
+    false,
+  );
+  assert.equal(
+    canTriggerSwitch({ id: 'dial', activationMode: 'repeatable' }, activated),
+    true,
+  );
+  assert.equal(
+    canTriggerSwitch(
+      { id: 'heart', activationMode: 'once' },
+      new Set(['heart']),
+      ['heart', 'spade'],
+      1,
+    ),
+    true,
+  );
+  assert.equal(
+    canTriggerSwitch(
+      { id: 'heart', activationMode: 'once' },
+      new Set(['heart', 'spade']),
+      ['heart', 'spade'],
+      2,
+    ),
+    false,
+  );
 });
 
 test('rotates axis-aligned room walls in ninety-degree steps', () => {

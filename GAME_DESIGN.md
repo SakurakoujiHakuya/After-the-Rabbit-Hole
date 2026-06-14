@@ -45,8 +45,11 @@
 - 动态房间使用 `rotators` 和 `requirements.rotations`，仅采用 90 度离散旋转以保证移动端碰撞稳定。
 - 玫瑰染色使用 `paintables` 和 `requirements.painted`，染色检查点由 `checkpoint: true` 声明。
 - 变形地图使用 `phases[].wallsByState` 和 `requirements.phases`；机关只切换离散状态，避免动画墙碰撞不确定。
+- 所有开关必须声明 `activationMode`：`once` 表示激活后锁定，`repeatable` 表示可循环切换状态；两类机关使用不同外观。
+- `allowedMoverOverlaps` 只记录经过审核的移动障碍遮挡；未声明的巡逻轨迹不得覆盖道具、开关、传送门或球槌。
 - 每章使用 `story` 显示关前对白，关键收集物与机关可通过 `eventStories` 触发关中对白。
 - `inheritances` 根据已保存的剧情选择向共通章节注入道具；旧存档会从已完成章节的最新 `next` 图谱派生新解锁项。
 - 火烈鸟弹射使用 `bumpers`，速度向量由 `impulseX` / `impulseY` 定义；`targetHoopId` 将球槌与球门绑定，后续火烈鸟由 `requiresSwitches` 逐段唤醒。
 - 槌球门使用 `requiresBumper` 校验最后一次有效击球，并用运动线段穿过球门开口判定得分；击球飞行期间暂时锁定玩家输入。
 - 后期关卡复用 `checkpoint`，降低长关卡失误后的重复路程。
+- 每个关卡及全部分支组合必须通过状态求解：在合法体型、镜层、旋转、开关顺序和传送流程中收齐所有物品并打开终点门。
