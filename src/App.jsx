@@ -199,7 +199,7 @@ function ChapterScreen({ progress, onSelect, onBack }) {
   );
 }
 
-function Joystick({ gravityRef }) {
+function Joystick({ gravityRef, horizontalOnly = false }) {
   const padRef = useRef(null);
   const [knob, setKnob] = useState({ x: 0, y: 0 });
 
@@ -207,11 +207,11 @@ function Joystick({ gravityRef }) {
     const rect = padRef.current.getBoundingClientRect();
     const dx = clientX - (rect.left + rect.width / 2);
     const dy = clientY - (rect.top + rect.height / 2);
-    const distance = Math.hypot(dx, dy);
     const max = rect.width * 0.29;
+    const distance = horizontalOnly ? Math.abs(dx) : Math.hypot(dx, dy);
     const ratio = distance > max ? max / distance : 1;
     const x = dx * ratio;
-    const y = dy * ratio;
+    const y = horizontalOnly ? 0 : dy * ratio;
     setKnob({ x, y });
     gravityRef.current.joystick = { x: x / max, y: y / max };
   };
@@ -706,9 +706,18 @@ export default function App() {
       card: '纸牌卫兵把你送回了玫瑰旁。',
       watch: '怀表追上了你，时间重新开始。',
       hazard: '漩涡把方向揉成了一团。',
+      spikes: '三颗心都碎了。兔子洞把你送回了最初的落点。',
+      fall: '你坠过了兔子洞的边界，只好从顶部重新寻找落点。',
     };
     setToast(messages[reason] || messages.hazard);
     if (navigator.vibrate) navigator.vibrate(90);
+  };
+
+  const handleDamage = ({ reason, lives }) => {
+    setToast(reason === 'spikes'
+      ? `尖刺擦伤了你。还剩 ${lives} 颗心，回到最近的金色平台。`
+      : `你错过了落点。还剩 ${lives} 颗心，回到最近的金色平台。`);
+    if (navigator.vibrate) navigator.vibrate([35, 25, 35]);
   };
 
   const handleComplete = (duration, collectedIds = []) => {
@@ -839,6 +848,7 @@ export default function App() {
             onSwitch={handleSwitch}
             onGiftUsed={handleGiftUsed}
             onZoneEnter={handleZoneEnter}
+            onDamage={handleDamage}
             onDeath={handleDeath}
             onLockedDoor={() => setToast(level.lockedHint || '门仍在等待缺少的证据。')}
             onComplete={handleComplete}
@@ -921,11 +931,23 @@ export default function App() {
             </div>
           )}
           <p className="control-label">
-            {controlMode === 'motion' ? '倾斜手机以移动' : controlMode === 'joystick' ? '拖动左下角圆盘' : '方向键 / WASD'}
+            {level.mode === 'fall'
+              ? controlMode === 'motion'
+                ? '左右倾斜手机选择落点'
+                : controlMode === 'joystick'
+                  ? '左右拖动圆盘选择落点'
+                  : '← → / A D 选择落点'
+              : controlMode === 'motion'
+                ? '倾斜手机以移动'
+                : controlMode === 'joystick'
+                  ? '拖动左下角圆盘'
+                  : '方向键 / WASD'}
           </p>
         </footer>
 
-        {controlMode === 'joystick' && <Joystick gravityRef={inputRef} />}
+        {controlMode === 'joystick' && (
+          <Joystick gravityRef={inputRef} horizontalOnly={level.mode === 'fall'} />
+        )}
         {toast && <div className="toast">{toast}</div>}
         <StoryBeat beat={storyBeat} onClose={() => setStoryBeat(null)} />
         {paused && (

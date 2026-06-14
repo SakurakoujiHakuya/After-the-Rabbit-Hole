@@ -2,12 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   activateSwitch,
+  applyFallDamage,
   applyBumperImpulse,
   canScoreLinkedHoop,
   canTriggerSwitch,
   circleRectCollision,
   getMoverRect,
+  getActiveFallPlatforms,
   getActiveMirrorZones,
+  getFallCameraY,
   getMirrorZoneEffects,
   getPhaseWalls,
   getRotatorWalls,
@@ -21,6 +24,7 @@ import {
   transformControlInput,
   updateMirrorZoneMembership,
   updateBall,
+  updateFallPlayer,
 } from '../src/gameEngine.js';
 
 test('moves the player without crossing a wall', () => {
@@ -31,6 +35,65 @@ test('moves the player without crossing a wall', () => {
   }
   assert.equal(circleRectCollision(ball, wall), false);
   assert.ok(ball.x <= wall.x - ball.radius);
+});
+
+test('lands on fall platforms only while crossing their top edge', () => {
+  const platform = { id: 'ledge', x: 80, y: 120, w: 120, h: 14 };
+  const falling = makeBall({ x: 120, y: 100 });
+  falling.vy = 8;
+  updateFallPlayer(falling, 0, [platform], 16.667);
+  assert.equal(falling.y, platform.y - falling.radius);
+  assert.equal(falling.vy, 0);
+  assert.equal(falling.groundedPlatformId, platform.id);
+
+  const rising = makeBall({ x: 120, y: 140 });
+  rising.vy = -5;
+  updateFallPlayer(rising, 0, [platform], 16.667);
+  assert.ok(rising.y < 140);
+  assert.notEqual(rising.y, platform.y + rising.radius);
+  assert.equal(rising.groundedPlatformId, null);
+});
+
+test('walks off a fall platform and ignores vertical control input', () => {
+  const platform = { id: 'ledge', x: 80, y: 120, w: 60, h: 14 };
+  const player = makeBall({ x: 132, y: platform.y - 13 });
+  player.groundedPlatformId = platform.id;
+  for (let index = 0; index < 30; index += 1) {
+    updateFallPlayer(player, 1, [platform], 16.667);
+  }
+  assert.ok(player.x - player.radius >= platform.x + platform.w);
+  assert.ok(player.y > platform.y - player.radius);
+  assert.ok(player.vy > 0);
+});
+
+test('expires fragile platforms after their configured delay', () => {
+  const fragile = { id: 'paper', type: 'fragile', breakDelay: 450 };
+  const breaking = new Map([['paper', 1000]]);
+  assert.deepEqual(
+    getActiveFallPlatforms([fragile], breaking, new Set(), 1449),
+    [fragile],
+  );
+  assert.deepEqual(
+    getActiveFallPlatforms([fragile], breaking, new Set(), 1450),
+    [],
+  );
+  assert.deepEqual(
+    getActiveFallPlatforms([fragile], new Map(), new Set(['paper']), 0),
+    [],
+  );
+});
+
+test('keeps the fall camera inside the world and moving downward', () => {
+  assert.equal(getFallCameraY(100, 0, 2400), 0);
+  assert.equal(getFallCameraY(900, 0, 2400), 680);
+  assert.equal(getFallCameraY(400, 680, 2400), 680);
+  assert.equal(getFallCameraY(2600, 0, 2400), 1760);
+});
+
+test('spends fall health before restarting the run', () => {
+  assert.deepEqual(applyFallDamage(3), { lives: 2, restart: false });
+  assert.deepEqual(applyFallDamage(2), { lives: 1, restart: false });
+  assert.deepEqual(applyFallDamage(1), { lives: 3, restart: true });
 });
 
 test('moves hazards along their configured axis', () => {

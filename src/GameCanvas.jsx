@@ -3,12 +3,15 @@ import { assetUrl } from './assets';
 import {
   WORLD,
   activateSwitch,
+  applyFallDamage,
   applyBumperImpulse,
   canTriggerSwitch,
   canScoreLinkedHoop,
   circleRectCollision,
   getMoverRect,
+  getActiveFallPlatforms,
   getActiveMirrorZones,
+  getFallCameraY,
   getMirrorZoneEffects,
   getPhaseWalls,
   getRotatorWalls,
@@ -24,6 +27,7 @@ import {
   transformControlInput,
   updateMirrorZoneMembership,
   updateBall,
+  updateFallPlayer,
 } from './gameEngine';
 
 function roundedRect(ctx, x, y, w, h, radius) {
@@ -911,6 +915,317 @@ function drawPlayer(ctx, player, avatar, time, visualEffects) {
   }
 }
 
+function drawFallPlatform(ctx, platform, breakingAt, time) {
+  ctx.save();
+  const fragile = platform.type === 'fragile';
+  const checkpoint = platform.type === 'checkpoint';
+  const breaking = breakingAt !== undefined;
+  if (breaking) {
+    const progress = Math.min(1, (time - breakingAt) / (platform.breakDelay ?? 450));
+    ctx.translate((Math.random() - 0.5) * progress * 3, 0);
+    ctx.globalAlpha = 1 - progress * 0.55;
+  }
+  const gradient = ctx.createLinearGradient(
+    platform.x,
+    platform.y,
+    platform.x,
+    platform.y + platform.h,
+  );
+  gradient.addColorStop(0, checkpoint ? '#d7bd79' : fragile ? '#b8a8c3' : '#718097');
+  gradient.addColorStop(1, checkpoint ? '#68573c' : fragile ? '#4d425c' : '#273247');
+  ctx.fillStyle = gradient;
+  ctx.strokeStyle = checkpoint ? '#f2d99a' : fragile ? '#ded0e7' : '#b2bdd0';
+  ctx.lineWidth = checkpoint ? 2 : 1;
+  roundedRect(ctx, platform.x, platform.y, platform.w, platform.h, 4);
+  ctx.fill();
+  ctx.stroke();
+  if (fragile) {
+    ctx.strokeStyle = 'rgba(241, 226, 244, .68)';
+    ctx.beginPath();
+    ctx.moveTo(platform.x + platform.w * 0.28, platform.y + 2);
+    ctx.lineTo(platform.x + platform.w * 0.42, platform.y + platform.h - 2);
+    ctx.lineTo(platform.x + platform.w * 0.57, platform.y + 3);
+    ctx.lineTo(platform.x + platform.w * 0.72, platform.y + platform.h - 2);
+    ctx.stroke();
+  }
+  if (checkpoint) {
+    ctx.fillStyle = '#f5df9e';
+    ctx.font = '12px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('✦', platform.x + platform.w / 2, platform.y - 7);
+  }
+  ctx.restore();
+}
+
+function drawFallHazard(ctx, hazard) {
+  ctx.save();
+  ctx.fillStyle = '#713748';
+  ctx.strokeStyle = '#e0a1ad';
+  ctx.shadowColor = '#a63c59';
+  ctx.shadowBlur = 10;
+  const spikeWidth = 12;
+  for (let x = hazard.x; x < hazard.x + hazard.w; x += spikeWidth) {
+    ctx.beginPath();
+    ctx.moveTo(x, hazard.y + hazard.h);
+    ctx.lineTo(Math.min(x + spikeWidth / 2, hazard.x + hazard.w), hazard.y);
+    ctx.lineTo(Math.min(x + spikeWidth, hazard.x + hazard.w), hazard.y + hazard.h);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawFallHud(ctx, lives, maxLives, playerY, worldHeight) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(9, 14, 25, .76)';
+  roundedRect(ctx, 12, 12, 112, 34, 17);
+  ctx.fill();
+  ctx.font = '17px serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  for (let index = 0; index < maxLives; index += 1) {
+    ctx.fillStyle = index < lives ? '#d97b91' : 'rgba(225, 214, 218, .2)';
+    ctx.fillText('♥', 25 + index * 27, 30);
+  }
+  const depth = Math.max(0, Math.min(100, Math.round((playerY / worldHeight) * 100)));
+  ctx.fillStyle = 'rgba(9, 14, 25, .76)';
+  roundedRect(ctx, 260, 12, 88, 34, 17);
+  ctx.fill();
+  ctx.fillStyle = '#dfd3b5';
+  ctx.font = '10px Georgia';
+  ctx.textAlign = 'center';
+  ctx.fillText(`坠落 ${depth}%`, 304, 30);
+  ctx.restore();
+}
+
+function FallGameCanvas({
+  level,
+  gravityRef,
+  paused,
+  resetToken,
+  onCollect,
+  onDamage,
+  onDeath,
+  onComplete,
+}) {
+  const canvasRef = useRef(null);
+  const stateRef = useRef(null);
+  const artRef = useRef({});
+  const callbacksRef = useRef({ onCollect, onDamage, onDeath, onComplete });
+  callbacksRef.current = { onCollect, onDamage, onDeath, onComplete };
+
+  useEffect(() => {
+    const garden = new Image();
+    garden.crossOrigin = 'anonymous';
+    garden.src = assetUrl('assets/art/dream-garden.jpg');
+    const avatar = new Image();
+    avatar.crossOrigin = 'anonymous';
+    avatar.src = assetUrl('assets/art/alice-chibi-head.png');
+    const cameo = new Image();
+    cameo.crossOrigin = 'anonymous';
+    cameo.src = assetUrl('assets/art/rabbit-cameo.png');
+    artRef.current = { garden, avatar, cameo };
+  }, []);
+
+  useEffect(() => {
+    const maxLives = level.fallConfig?.lives || 3;
+    stateRef.current = {
+      player: makeBall(level.start),
+      collected: new Set(),
+      checkpoint: { ...level.start },
+      checkpointId: null,
+      lives: maxLives,
+      maxLives,
+      immunityUntil: 0,
+      breakingPlatforms: new Map(),
+      brokenPlatforms: new Set(),
+      cameraY: 0,
+      complete: false,
+      particles: [],
+      shakeUntil: 0,
+      startedAt: performance.now(),
+      pauseBeganAt: null,
+      pausedDuration: 0,
+    };
+  }, [level, resetToken]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    let animationFrame;
+    let previous = performance.now();
+
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = WORLD.width * dpr;
+      canvas.height = WORLD.height * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    const resetRun = (state) => {
+      state.checkpoint = { ...level.start };
+      state.checkpointId = null;
+      state.breakingPlatforms = new Map();
+      state.brokenPlatforms = new Set();
+      resetBall(state.player, level.start);
+      state.cameraY = 0;
+    };
+
+    const takeDamage = (state, reason, time) => {
+      if (time < state.immunityUntil) return;
+      const result = applyFallDamage(state.lives, state.maxLives);
+      state.lives = result.lives;
+      state.shakeUntil = time + 280;
+      spawnBurst(state, state.player.x, state.player.y, '#df8198', 18);
+      if (result.restart) {
+        resetRun(state);
+        state.immunityUntil = time + 900;
+        callbacksRef.current.onDeath(reason);
+      } else {
+        resetBall(state.player, state.checkpoint);
+        state.cameraY = Math.max(
+          0,
+          Math.min(level.worldHeight - WORLD.height, state.checkpoint.y - 180),
+        );
+        state.immunityUntil = time + (level.fallConfig?.respawnImmunity || 1200);
+        callbacksRef.current.onDamage?.({
+          reason,
+          lives: state.lives,
+          maxLives: state.maxLives,
+        });
+      }
+    };
+
+    const frame = (time) => {
+      const state = stateRef.current;
+      const dt = time - previous;
+      previous = time;
+
+      if (state && paused && state.pauseBeganAt === null) {
+        state.pauseBeganAt = time;
+      } else if (state && !paused && state.pauseBeganAt !== null) {
+        state.pausedDuration += time - state.pauseBeganAt;
+        state.pauseBeganAt = null;
+      }
+
+      if (state && !paused && !state.complete) {
+        for (const [id, breakingAt] of state.breakingPlatforms) {
+          const platform = level.platforms.find((entry) => entry.id === id);
+          if (platform && time - breakingAt >= (platform.breakDelay ?? 450)) {
+            state.brokenPlatforms.add(id);
+          }
+        }
+        const activePlatforms = getActiveFallPlatforms(
+          level.platforms,
+          state.breakingPlatforms,
+          state.brokenPlatforms,
+          time,
+        );
+        const landed = updateFallPlayer(
+          state.player,
+          gravityRef.current?.x || 0,
+          activePlatforms,
+          dt,
+          level.fallConfig,
+        );
+        if (landed?.type === 'fragile' && !state.breakingPlatforms.has(landed.id)) {
+          state.breakingPlatforms.set(landed.id, time);
+          spawnBurst(state, state.player.x, landed.y, '#c8b4d0', 8);
+        }
+        if (landed?.type === 'checkpoint' && state.checkpointId !== landed.id) {
+          state.checkpointId = landed.id;
+          state.checkpoint = {
+            x: landed.x + landed.w / 2,
+            y: landed.y - state.player.radius,
+          };
+          spawnBurst(state, state.checkpoint.x, landed.y, '#f1d58b', 16);
+        }
+
+        state.cameraY = getFallCameraY(
+          state.player.y,
+          state.cameraY,
+          level.worldHeight,
+        );
+
+        for (const item of level.items || []) {
+          if (state.collected.has(item.id) || !overlapsItem(state.player, item)) continue;
+          state.collected.add(item.id);
+          spawnBurst(state, item.x, item.y, '#f1d38e', 14);
+          callbacksRef.current.onCollect(item);
+        }
+
+        const hazard = (level.fallHazards || []).find(
+          (entry) => circleRectCollision(state.player, entry),
+        );
+        if (hazard) takeDamage(state, 'spikes', time);
+        if (state.player.y - state.player.radius > level.worldHeight + 40) {
+          takeDamage(state, 'fall', time);
+        }
+
+        if (circleRectCollision(state.player, level.goal)) {
+          state.complete = true;
+          callbacksRef.current.onComplete(
+            time - state.startedAt - state.pausedDuration,
+            [...state.collected],
+          );
+        }
+      }
+
+      ctx.clearRect(0, 0, WORLD.width, WORLD.height);
+      ctx.save();
+      if (state && time < state.shakeUntil) {
+        ctx.translate((Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5);
+      }
+      drawPaper(ctx, artRef.current.garden);
+      if (state) {
+        ctx.save();
+        ctx.translate(0, -state.cameraY);
+        for (const platform of level.platforms) {
+          if (state.brokenPlatforms.has(platform.id)) continue;
+          drawFallPlatform(
+            ctx,
+            platform,
+            state.breakingPlatforms.get(platform.id),
+            time,
+          );
+        }
+        (level.fallHazards || []).forEach((hazard) => drawFallHazard(ctx, hazard));
+        drawDoor(ctx, level.goal, true, time);
+        for (const item of level.items || []) {
+          if (!state.collected.has(item.id)) drawItem(ctx, item, time, artRef.current);
+        }
+        drawPlayer(ctx, state.player, artRef.current.avatar, time, {
+          mirrored: false,
+          echo: false,
+          vanish: time < state.immunityUntil && Math.floor(time / 90) % 2 === 0,
+        });
+        state.particles = drawParticles(ctx, state.particles, dt);
+        ctx.restore();
+        drawFallHud(
+          ctx,
+          state.lives,
+          state.maxLives,
+          state.player.y,
+          level.worldHeight,
+        );
+      }
+      ctx.restore();
+      animationFrame = requestAnimationFrame(frame);
+    };
+
+    animationFrame = requestAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      window.removeEventListener('resize', resize);
+    };
+  }, [gravityRef, level, paused, resetToken]);
+
+  return <canvas ref={canvasRef} className="game-canvas" aria-label={`${level.name}下坠关卡`} />;
+}
+
 function getActiveGates(level, switches) {
   return (level.gates || []).filter((gate) => {
     const ids = gate.switchIds || [gate.switchId];
@@ -918,7 +1233,7 @@ function getActiveGates(level, switches) {
   });
 }
 
-export default function GameCanvas({
+function MazeGameCanvas({
   level,
   gravityRef,
   paused,
@@ -1494,4 +1809,9 @@ export default function GameCanvas({
   }, [gravityRef, level, paused, resetToken]);
 
   return <canvas ref={canvasRef} className="game-canvas" aria-label={`${level.name}迷宫`} />;
+}
+
+export default function GameCanvas(props) {
+  if (props.level.mode === 'fall') return <FallGameCanvas {...props} />;
+  return <MazeGameCanvas {...props} />;
 }

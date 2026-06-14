@@ -206,6 +206,93 @@ export function resetBall(ball, point) {
   ball.spin = 0;
 }
 
+export function getActiveFallPlatforms(
+  platforms,
+  breakingPlatforms = new Map(),
+  brokenPlatforms = new Set(),
+  time = 0,
+) {
+  return (platforms || []).filter((platform) => {
+    if (brokenPlatforms.has(platform.id)) return false;
+    const breakingAt = breakingPlatforms.get(platform.id);
+    if (breakingAt === undefined) return true;
+    return time - breakingAt < (platform.breakDelay ?? 450);
+  });
+}
+
+export function updateFallPlayer(player, inputX, platforms, dt, options = {}) {
+  const frame = Math.min(dt, 32) / 16.667;
+  const horizontalAccel = options.horizontalAccel ?? 0.28;
+  const horizontalDrag = (options.horizontalDrag ?? 0.9) ** frame;
+  const maxHorizontalSpeed = options.maxHorizontalSpeed ?? 4.5;
+  const gravity = options.gravity ?? 0.34;
+  const maxFallSpeed = options.maxFallSpeed ?? 8.5;
+  const worldWidth = options.worldWidth ?? WORLD.width;
+  const previous = { x: player.x, y: player.y };
+
+  player.vx = (player.vx + inputX * horizontalAccel * frame) * horizontalDrag;
+  player.vx = Math.max(-maxHorizontalSpeed, Math.min(maxHorizontalSpeed, player.vx));
+  player.vy = Math.min(maxFallSpeed, player.vy + gravity * frame);
+
+  player.x += player.vx * frame;
+  if (player.x < player.radius) {
+    player.x = player.radius;
+    player.vx = Math.max(0, player.vx) * 0.25;
+  } else if (player.x > worldWidth - player.radius) {
+    player.x = worldWidth - player.radius;
+    player.vx = Math.min(0, player.vx) * 0.25;
+  }
+
+  const nextY = player.y + player.vy * frame;
+  let landedPlatform = null;
+  if (player.vy >= 0) {
+    const previousBottom = previous.y + player.radius;
+    const nextBottom = nextY + player.radius;
+    landedPlatform = (platforms || [])
+      .filter((platform) => (
+        previousBottom <= platform.y + 0.5 &&
+        nextBottom >= platform.y &&
+        player.x + player.radius > platform.x &&
+        player.x - player.radius < platform.x + platform.w
+      ))
+      .sort((left, right) => left.y - right.y)[0] || null;
+  }
+
+  if (landedPlatform) {
+    player.y = landedPlatform.y - player.radius;
+    player.vy = 0;
+    player.groundedPlatformId = landedPlatform.id;
+  } else {
+    player.y = nextY;
+    player.groundedPlatformId = null;
+  }
+
+  const distance = Math.hypot(player.x - previous.x, player.y - previous.y);
+  player.spin += (distance / Math.max(1, player.radius)) * Math.sign(player.vx || 1);
+  player.trail.unshift({ x: player.x, y: player.y });
+  if (player.trail.length > 14) player.trail.pop();
+  return landedPlatform;
+}
+
+export function getFallCameraY(
+  playerY,
+  currentY,
+  worldHeight,
+  viewportHeight = WORLD.height,
+  followLine = 220,
+) {
+  const maximum = Math.max(0, worldHeight - viewportHeight);
+  const target = Math.max(0, Math.min(maximum, playerY - followLine));
+  return Math.max(currentY, target);
+}
+
+export function applyFallDamage(lives, maxLives = 3) {
+  if (lives > 1) {
+    return { lives: lives - 1, restart: false };
+  }
+  return { lives: maxLives, restart: true };
+}
+
 export function applyBumperImpulse(ball, bumper) {
   ball.vx = bumper.impulseX;
   ball.vy = bumper.impulseY;

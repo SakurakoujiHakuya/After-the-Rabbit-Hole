@@ -581,6 +581,7 @@ test('keeps static interaction targets visually separated in every branch varian
 
 test('solves every chapter variant while collecting every configured item', () => {
   for (const base of levels) {
+    if (base.mode === 'fall') continue;
     for (const { label, level } of levelVariants(base)) {
       const result = solveLevel(level);
       const missing = (level.items || [])
@@ -603,6 +604,38 @@ test('solves every chapter variant while collecting every configured item', () =
       );
     }
   }
+});
+
+test('defines a complete vertical fall route for the opening chapter', () => {
+  const level = levelById['rabbit-fall'];
+  assert.equal(level.mode, 'fall');
+  assert.ok(level.worldHeight >= 2200);
+  assert.equal(level.fallConfig.lives, 3);
+  assert.ok(level.goal.y > 2000);
+  assert.ok(level.platforms.length >= 14);
+  assert.ok(level.platforms.some((platform) => platform.type === 'fragile'));
+  assert.ok(level.platforms.filter((platform) => platform.type === 'checkpoint').length >= 2);
+  assert.ok(level.fallHazards.length >= 3);
+
+  const ids = new Set();
+  let previousY = 0;
+  for (const platform of level.platforms) {
+    assert.ok(platform.id && !ids.has(platform.id));
+    ids.add(platform.id);
+    assert.ok(['solid', 'fragile', 'checkpoint'].includes(platform.type));
+    assert.ok(platform.x >= 0 && platform.x + platform.w <= 360);
+    assert.ok(platform.y > previousY, `${platform.id} is out of fall order`);
+    assert.ok(platform.y < level.worldHeight);
+    previousY = platform.y;
+  }
+
+  const cameo = level.items.find((item) => item.id === 'cameo-rabbit-fall');
+  const cameoPlatform = level.platforms.find((platform) => (
+    cameo.x >= platform.x &&
+    cameo.x <= platform.x + platform.w &&
+    cameo.y < platform.y
+  ));
+  assert.ok(cameoPlatform, 'the hidden cameo needs a reachable landing platform');
 });
 
 test('defines reachable croquet routes with valid flamingo impulses', () => {
