@@ -22,6 +22,7 @@ import {
   getMirrorZoneEffects,
   getPhaseWalls,
   getRotatorWalls,
+  getTargetAssistVector,
   isBumperEnabled,
   isItemAvailable,
   isMirrorControlActive,
@@ -1497,6 +1498,54 @@ function getActiveGates(level, switches) {
   });
 }
 
+function getAssistTargets(level, state) {
+  const items = (level.items || [])
+    .filter((item) => (
+      item.assist !== false &&
+      item.type !== 'curiosity' &&
+      item.type !== 'checkpoint' &&
+      !state.collected.has(item.id) &&
+      isItemAvailable(item, state)
+    ))
+    .map((item) => ({ ...item, assistKind: 'item' }));
+
+  const switches = (level.switches || [])
+    .filter((trigger) => {
+      if (trigger.assist === false || trigger.action === 'hoop') return false;
+      if (trigger.triggerSource && trigger.triggerSource !== 'player') return false;
+      if (trigger.activationMode === 'repeatable' && trigger.assist !== true) return false;
+      if (
+        level.switchSequence?.length &&
+        trigger.id !== level.switchSequence[state.sequenceIndex]
+      ) return false;
+      if (
+        (trigger.minRadius && state.player.radius < trigger.minRadius) ||
+        (trigger.maxRadius && state.player.radius > trigger.maxRadius)
+      ) return false;
+      if ((trigger.requiresItems || []).some((id) => !state.collected.has(id))) {
+        return false;
+      }
+      return canTriggerSwitch(
+        trigger,
+        state.switches,
+        level.switchSequence,
+        state.sequenceIndex,
+      );
+    })
+    .map((trigger) => ({ ...trigger, assistKind: 'switch' }));
+
+  const goal = requirementsMet(level.goal.requires, state)
+    ? [{
+        id: 'level-goal',
+        assistKind: 'goal',
+        x: level.goal.x + level.goal.w / 2,
+        y: level.goal.y + level.goal.h / 2,
+        r: Math.min(level.goal.w, level.goal.h) / 2,
+      }]
+    : [];
+  return [...items, ...switches, ...goal];
+}
+
 function MazeGameCanvas({
   level,
   gravityRef,
@@ -1744,16 +1793,6 @@ function MazeGameCanvas({
           state,
           activeMirrorZones,
         );
-        const gravity = {
-          x: bumperFlight
-            ? 0
-            : transformedInput.x +
-              currentZones.reduce((sum, zone) => sum + (zone.forceX || 0), 0),
-          y: bumperFlight
-            ? 0
-            : transformedInput.y +
-              currentZones.reduce((sum, zone) => sum + (zone.forceY || 0), 0),
-        };
         const previousPosition = { x: state.player.x, y: state.player.y };
         const presentIdentitySeal = (level.switches || []).find(
           (trigger) => trigger.simultaneousGroup && trigger.triggerSource === 'player',
@@ -1768,19 +1807,56 @@ function MazeGameCanvas({
         const sizeGates = (level.sizeGates || []).filter(
           (gate) => state.player.radius > gate.maxRadius,
         );
-        updateBall(state.player, gravity, [
+        const collisionWalls = [
           ...level.walls,
           ...activeGates,
           ...sizeGates,
           ...rotatorWalls,
           ...phaseWalls,
-        ], dt, {
+        ];
+        const useMotionModel = (
+          controlMode === 'motion' &&
+          !onIce &&
+          !bumperFlight
+        );
+        const currentForce = {
+          x: currentZones.reduce((sum, zone) => sum + (zone.forceX || 0), 0),
+          y: currentZones.reduce((sum, zone) => sum + (zone.forceY || 0), 0),
+        };
+        const assist = useMotionModel
+          ? getTargetAssistVector(
+              state.player,
+              transformedInput,
+              Math.hypot(state.player.vx, state.player.vy),
+              getAssistTargets(level, state),
+              collisionWalls,
+            )
+          : { x: 0, y: 0 };
+        const playerInput = {
+          x: bumperFlight ? 0 : transformedInput.x + assist.x,
+          y: bumperFlight ? 0 : transformedInput.y + assist.y,
+        };
+        const gravity = useMotionModel
+          ? playerInput
+          : {
+              x: playerInput.x + currentForce.x,
+              y: playerInput.y + currentForce.y,
+            };
+        updateBall(state.player, gravity, collisionWalls, dt, {
+          motionModel: useMotionModel ? 'targetVelocity' : 'force',
+          externalForce: useMotionModel ? currentForce : undefined,
           friction: bumperFlight
             ? 0.998
             : onIce
               ? 0.996
               : 0.9 + 0.082 * identitySlowdown,
-          maxSpeed: (bumperFlight ? 6.2 : onIce ? 5.8 : 4.8) * identitySlowdown,
+          maxSpeed: (
+            bumperFlight
+              ? 6.2
+              : onIce
+                ? 5.8
+                : useMotionModel ? 4.1 : 4.8
+          ) * identitySlowdown,
         });
         if (level.echoReplay) {
           state.positionHistory.push({

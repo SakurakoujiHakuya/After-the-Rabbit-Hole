@@ -304,6 +304,147 @@ export function makeBall(start) {
     baseRadius: 13,
     trail: [],
     spin: 0,
+    contacts: [],
+  };
+}
+
+function clampVector(vector, maximum = 1) {
+  const magnitude = Math.hypot(vector.x, vector.y);
+  if (magnitude <= maximum || !magnitude) return { ...vector };
+  return {
+    x: vector.x / magnitude * maximum,
+    y: vector.y / magnitude * maximum,
+  };
+}
+
+function approachWithTimeConstant(current, target, dt, timeConstant) {
+  if (timeConstant <= 0) return target;
+  return current + (target - current) * (1 - Math.exp(-dt / timeConstant));
+}
+
+export function constrainInputByContacts(input, contacts = []) {
+  return contacts.reduce((result, contact) => {
+    const inward = result.x * contact.nx + result.y * contact.ny;
+    if (inward >= 0) return result;
+    return {
+      x: result.x - contact.nx * inward,
+      y: result.y - contact.ny * inward,
+    };
+  }, { ...input });
+}
+
+function rememberContact(ball, normal, duration) {
+  const existing = ball.contacts.find(
+    (contact) => contact.nx === normal.nx && contact.ny === normal.ny,
+  );
+  if (existing) {
+    existing.remaining = duration;
+    return;
+  }
+  ball.contacts.push({ ...normal, remaining: duration });
+}
+
+function segmentBlockedByWalls(from, to, walls, radius, targetRadius) {
+  const distance = Math.hypot(to.x - from.x, to.y - from.y);
+  const travelDistance = Math.max(0, distance - targetRadius);
+  const steps = Math.max(1, Math.ceil(travelDistance / 4));
+  for (let index = 1; index < steps; index += 1) {
+    const progress = index / steps;
+    const probe = {
+      x: from.x + (to.x - from.x) * progress,
+      y: from.y + (to.y - from.y) * progress,
+      radius,
+    };
+    if (walls.some((wall) => circleRectCollision(probe, wall))) return true;
+  }
+  return false;
+}
+
+export function selectAssistTarget(
+  player,
+  input,
+  targets,
+  walls,
+  {
+    edgeRange = 24,
+    coneAngle = Math.PI / 3,
+  } = {},
+) {
+  const inputMagnitude = Math.hypot(input.x, input.y);
+  const coneCosine = Math.cos(coneAngle);
+  let selected = null;
+
+  for (const target of targets || []) {
+    const dx = target.x - player.x;
+    const dy = target.y - player.y;
+    const distance = Math.hypot(dx, dy);
+    if (!distance) continue;
+    const targetRadius = target.r || 12;
+    const edgeDistance = distance - player.radius - targetRadius;
+    if (edgeDistance > edgeRange) continue;
+
+    const alignment = inputMagnitude > 0.12
+      ? (dx * input.x + dy * input.y) / (distance * inputMagnitude)
+      : 1;
+    if (inputMagnitude > 0.12 && alignment < coneCosine) continue;
+    if (segmentBlockedByWalls(player, target, walls, player.radius, targetRadius)) {
+      continue;
+    }
+
+    const distanceWeight = (
+      1 - Math.max(0, edgeDistance) / edgeRange
+    ) ** 2;
+    const score = distanceWeight * (0.55 + 0.45 * Math.max(0, alignment));
+    if (!selected || score > selected.score) {
+      selected = { target, score, edgeDistance, alignment };
+    }
+  }
+  return selected;
+}
+
+export function getTargetAssistVector(
+  player,
+  input,
+  speed,
+  targets,
+  walls,
+  {
+    minimumIntent = 0.035,
+    maximumInput = 0.58,
+    maximumSpeed = 1.7,
+    maximumStrength = 0.14,
+    edgeRange = 24,
+    coneAngle = Math.PI / 3,
+  } = {},
+) {
+  const inputMagnitude = Math.hypot(input.x, input.y);
+  if (inputMagnitude < minimumIntent && speed < 0.2) {
+    return { x: 0, y: 0, target: null };
+  }
+  if (inputMagnitude > maximumInput || speed > maximumSpeed) {
+    return { x: 0, y: 0, target: null };
+  }
+  const selected = selectAssistTarget(
+    player,
+    input,
+    targets,
+    walls,
+    { edgeRange, coneAngle },
+  );
+  if (!selected) return { x: 0, y: 0, target: null };
+
+  const dx = selected.target.x - player.x;
+  const dy = selected.target.y - player.y;
+  const distance = Math.hypot(dx, dy);
+  const distanceWeight = (
+    1 - Math.max(0, selected.edgeDistance) / edgeRange
+  ) ** 2;
+  const controlWeight = 1 - Math.min(1, inputMagnitude / maximumInput) * 0.65;
+  const strength = maximumStrength * distanceWeight * controlWeight;
+  return {
+    x: dx / distance * strength,
+    y: dy / distance * strength,
+    target: selected.target,
   };
 }
 
@@ -312,9 +453,50 @@ export function updateBall(ball, gravity, walls, dt, options = {}) {
   const accel = options.accel ?? 0.17;
   const friction = (options.friction ?? 0.985) ** frame;
   const maxSpeed = options.maxSpeed ?? 4.8;
+  const motionModel = options.motionModel || 'force';
+  ball.contacts = (ball.contacts || [])
+    .map((contact) => ({ ...contact, remaining: contact.remaining - dt }))
+    .filter((contact) => contact.remaining > 0);
 
-  ball.vx = (ball.vx + gravity.x * accel * frame) * friction;
-  ball.vy = (ball.vy + gravity.y * accel * frame) * friction;
+  let appliedInput = gravity;
+  if (motionModel === 'targetVelocity') {
+    const externalForce = options.externalForce || { x: 0, y: 0 };
+    const combinedInput = {
+      x: gravity.x + externalForce.x * (options.externalSpeedScale ?? 0.52),
+      y: gravity.y + externalForce.y * (options.externalSpeedScale ?? 0.52),
+    };
+    appliedInput = clampVector(
+      constrainInputByContacts(combinedInput, ball.contacts),
+      options.maximumInput ?? 1,
+    );
+    const targetVelocity = {
+      x: appliedInput.x * maxSpeed,
+      y: appliedInput.y * maxSpeed,
+    };
+    const responseTime = (current, target) => {
+      if (current && target && Math.sign(current) !== Math.sign(target)) {
+        return options.reverseResponseMs ?? 55;
+      }
+      return Math.abs(target) > Math.abs(current)
+        ? options.attackResponseMs ?? 95
+        : options.releaseResponseMs ?? 65;
+    };
+    ball.vx = approachWithTimeConstant(
+      ball.vx,
+      targetVelocity.x,
+      Math.min(dt, 32),
+      responseTime(ball.vx, targetVelocity.x),
+    );
+    ball.vy = approachWithTimeConstant(
+      ball.vy,
+      targetVelocity.y,
+      Math.min(dt, 32),
+      responseTime(ball.vy, targetVelocity.y),
+    );
+  } else {
+    ball.vx = (ball.vx + gravity.x * accel * frame) * friction;
+    ball.vy = (ball.vy + gravity.y * accel * frame) * friction;
+  }
 
   const speed = Math.hypot(ball.vx, ball.vy);
   if (speed > maxSpeed) {
@@ -325,11 +507,21 @@ export function updateBall(ball, gravity, walls, dt, options = {}) {
   const steps = Math.max(1, Math.ceil(speed / 2.4));
   const startX = ball.x;
   const startY = ball.y;
+  const collisions = [];
   for (let i = 0; i < steps; i += 1) {
     const nextX = ball.x + (ball.vx * frame) / steps;
     const testX = { ...ball, x: nextX };
     if (walls.some((wall) => circleRectCollision(testX, wall))) {
-      ball.vx *= -0.28;
+      if (motionModel === 'targetVelocity') {
+        const normal = { nx: ball.vx > 0 ? -1 : 1, ny: 0 };
+        rememberContact(ball, normal, options.contactSuppressionMs ?? 120);
+        collisions.push({ axis: 'x', ...normal });
+        ball.vx = Math.abs(ball.vx) < (options.bounceThreshold ?? 0.65)
+          ? 0
+          : -ball.vx * (options.restitution ?? 0.06);
+      } else {
+        ball.vx *= -0.28;
+      }
     } else {
       ball.x = nextX;
     }
@@ -337,10 +529,28 @@ export function updateBall(ball, gravity, walls, dt, options = {}) {
     const nextY = ball.y + (ball.vy * frame) / steps;
     const testY = { ...ball, y: nextY };
     if (walls.some((wall) => circleRectCollision(testY, wall))) {
-      ball.vy *= -0.28;
+      if (motionModel === 'targetVelocity') {
+        const normal = { nx: 0, ny: ball.vy > 0 ? -1 : 1 };
+        rememberContact(ball, normal, options.contactSuppressionMs ?? 120);
+        collisions.push({ axis: 'y', ...normal });
+        ball.vy = Math.abs(ball.vy) < (options.bounceThreshold ?? 0.65)
+          ? 0
+          : -ball.vy * (options.restitution ?? 0.06);
+      } else {
+        ball.vy *= -0.28;
+      }
     } else {
       ball.y = nextY;
     }
+  }
+
+  if (
+    motionModel === 'targetVelocity' &&
+    Math.hypot(appliedInput.x, appliedInput.y) <= (options.sleepInput ?? 0.05) &&
+    Math.hypot(ball.vx, ball.vy) < (options.sleepSpeed ?? 0.14)
+  ) {
+    ball.vx = 0;
+    ball.vy = 0;
   }
 
   const distance = Math.hypot(ball.x - startX, ball.y - startY);
@@ -350,6 +560,7 @@ export function updateBall(ball, gravity, walls, dt, options = {}) {
   ball.spin += (distance / Math.max(1, ball.radius)) * spinDirection;
   ball.trail.unshift({ x: ball.x, y: ball.y });
   if (ball.trail.length > 14) ball.trail.pop();
+  return { collisions, appliedInput };
 }
 
 export function resetBall(ball, point) {
@@ -359,6 +570,7 @@ export function resetBall(ball, point) {
   ball.vy = 0;
   ball.trail = [];
   ball.spin = 0;
+  ball.contacts = [];
 }
 
 export function getActiveFallPlatforms(

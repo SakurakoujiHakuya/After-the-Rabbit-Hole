@@ -399,6 +399,21 @@ button {
 .paper-modal .primary-button { margin-top: 15px; }
 .paper-modal .text-button { color: #5b503b; border-color: rgba(79, 63, 35, .3); }
 
+.calibration-status {
+  margin: -4px 0 16px;
+  color: rgba(52, 58, 80, .72);
+  font-size: 12px;
+  letter-spacing: .08em;
+}
+
+.calibration-status.ready {
+  color: #527967;
+}
+
+.calibration-status.timeout {
+  color: #9f5361;
+}
+
 .modal-close {
   position: absolute;
   z-index: 2;
@@ -997,6 +1012,23 @@ button {
   display: block;
   min-width: 218px;
   margin: 12px auto 0;
+}
+
+@media (max-height: 700px) {
+  .paper-modal.compact {
+    padding-top: 28px;
+    padding-bottom: 24px;
+  }
+
+  .paper-modal.compact h2 {
+    margin-bottom: 12px;
+    font-size: 30px;
+  }
+
+  .paper-modal.compact .secondary-button {
+    margin-top: 8px;
+    padding-block: 8px;
+  }
 }
 
 .secondary-button {

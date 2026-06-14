@@ -12,6 +12,12 @@ import {
   loadProgress,
   recordDeath,
 } from './progress';
+import {
+  beginMotionCalibration,
+  createMotionControlState,
+  timeoutMotionCalibration,
+  updateMotionControl,
+} from './motionControls';
 
 const debugLevelId = import.meta.env.DEV
   ? new URLSearchParams(window.location.search).get('level')
@@ -264,13 +270,37 @@ function Joystick({ gravityRef, horizontalOnly = false }) {
   );
 }
 
-function PauseModal({ onResume, onRestart, onChapters, onQuit }) {
+function PauseModal({
+  motion,
+  calibrationStatus,
+  onResume,
+  onRecalibrate,
+  onUseTouch,
+  onRestart,
+  onChapters,
+  onQuit,
+}) {
   return (
     <div className="modal-backdrop">
       <section className="paper-modal compact">
         <p className="kicker">A SMALL PAUSE</p>
         <h2>世界暂时<br />停止倾斜</h2>
+        {motion && (
+          <p className={`calibration-status ${calibrationStatus}`}>
+            {calibrationStatus === 'ready'
+              ? '倾斜方向已经校准'
+              : calibrationStatus === 'timeout'
+                ? '世界还没有辨认出方向'
+                : '请按自然姿势握稳手机'}
+          </p>
+        )}
         <button className="primary-button" onClick={onResume}>继续寻找</button>
+        {motion && (
+          <>
+            <button className="secondary-button" onClick={onRecalibrate}>重新校准倾斜</button>
+            <button className="secondary-button" onClick={onUseTouch}>改用触摸控制</button>
+          </>
+        )}
         <button className="secondary-button" onClick={onRestart}>重新开始本关</button>
         <button className="secondary-button" onClick={onChapters}>章节书签</button>
         <button className="text-button" onClick={onQuit}>回到兔子洞口</button>
@@ -416,6 +446,7 @@ export default function App() {
   const [musicMuted, setMusicMuted] = useState(false);
   const [musicPlaying, setMusicPlaying] = useState(false);
   const [controlMode, setControlMode] = useState('keyboard');
+  const [motionStatus, setMotionStatus] = useState('idle');
   const [progress, setProgress] = useState(loadProgress);
   const [levelId, setLevelId] = useState(() => debugLevelId || loadProgress().currentLevelId);
   const [pendingLevelId, setPendingLevelId] = useState(() => debugLevelId || loadProgress().currentLevelId);
@@ -440,12 +471,25 @@ export default function App() {
     joystick: { x: 0, y: 0 },
   });
   const gravityRef = useRef({ x: 0, y: 0 });
+  const motionStateRef = useRef(createMotionControlState());
   const keysRef = useRef(new Set());
   const audioRef = useRef(null);
   const level = useMemo(
     () => getPlayableLevel(levelId, progress.choices),
     [levelId, progress.choices],
   );
+
+  const startMotionCalibration = useCallback((preserveNeutral = true) => {
+    motionStateRef.current = beginMotionCalibration(
+      motionStateRef.current,
+      performance.now(),
+      { preserveNeutral },
+    );
+    inputRef.current.motion = { x: 0, y: 0 };
+    gravityRef.current = { x: 0, y: 0 };
+    setMotionStatus('calibrating');
+    setToast('请按自然姿势握稳手机，世界正在辨认方向。');
+  }, []);
 
   const startMusic = useCallback(async () => {
     const audio = audioRef.current;
@@ -501,6 +545,19 @@ export default function App() {
     setStoryBeat(null);
     setSeenStoryEvents([]);
     setPaused(false);
+    if (mode === 'motion') {
+      motionStateRef.current = beginMotionCalibration(
+        createMotionControlState(),
+        performance.now(),
+      );
+      inputRef.current.motion = { x: 0, y: 0 };
+      setMotionStatus('calibrating');
+      setToast('请按自然姿势握稳手机，世界正在辨认方向。');
+    } else {
+      motionStateRef.current = createMotionControlState();
+      inputRef.current.motion = { x: 0, y: 0 };
+      setMotionStatus('idle');
+    }
     setResetToken((value) => value + 1);
     setScreen('game');
     emitEvent('game_start', { controlMode: mode, levelId: targetLevelId });
@@ -537,16 +594,74 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (controlMode !== 'motion') return undefined;
+    const getScreenAngle = () => (
+      window.screen?.orientation?.angle ??
+      window.orientation ??
+      0
+    );
     const onOrientation = (event) => {
-      const gamma = Math.max(-28, Math.min(28, event.gamma || 0)) / 16;
-      const betaOffset = window.innerHeight > window.innerWidth ? 35 : 0;
-      const beta = Math.max(-28, Math.min(28, (event.beta || 0) - betaOffset)) / 16;
-      inputRef.current.motion.x = inputRef.current.motion.x * 0.82 + gamma * 0.18;
-      inputRef.current.motion.y = inputRef.current.motion.y * 0.82 + beta * 0.18;
+      const previousStatus = motionStateRef.current.status;
+      const next = updateMotionControl(
+        motionStateRef.current,
+        {
+          beta: event.beta,
+          gamma: event.gamma,
+          screenAngle: getScreenAngle(),
+        },
+        performance.now(),
+      );
+      motionStateRef.current = next;
+      inputRef.current.motion = { ...next.output };
+      if (next.status !== previousStatus) {
+        setMotionStatus(next.status);
+        if (next.status === 'calibrating') {
+          setToast('传感器刚刚醒来，请握稳手机重新辨认方向。');
+        } else if (next.status === 'ready') {
+          setToast('方向记住了。现在让世界跟着你倾斜。');
+        } else if (next.status === 'timeout') {
+          setToast('没有辨认出稳定方向，请暂停后重新校准或改用触摸。');
+        }
+      }
     };
     window.addEventListener('deviceorientation', onOrientation, true);
     return () => window.removeEventListener('deviceorientation', onOrientation, true);
-  }, []);
+  }, [controlMode]);
+
+  useEffect(() => {
+    if (controlMode !== 'motion' || motionStatus !== 'calibrating') return undefined;
+    const timeout = window.setTimeout(() => {
+      const previous = motionStateRef.current;
+      const next = timeoutMotionCalibration(previous, performance.now());
+      motionStateRef.current = next;
+      inputRef.current.motion = { x: 0, y: 0 };
+      if (next.status !== previous.status) {
+        setMotionStatus(next.status);
+        setToast(
+          next.status === 'ready'
+            ? '没有取得新的稳定方向，暂时沿用上一次校准。'
+            : '没有辨认出稳定方向，请暂停后重新校准或改用触摸。',
+        );
+      }
+    }, 1850);
+    return () => window.clearTimeout(timeout);
+  }, [controlMode, motionStatus]);
+
+  useEffect(() => {
+    if (controlMode !== 'motion') return undefined;
+    const recalibrateAfterResume = () => {
+      if (document.visibilityState === 'visible') startMotionCalibration(true);
+    };
+    const recalibrateAfterRotation = () => startMotionCalibration(false);
+    document.addEventListener('visibilitychange', recalibrateAfterResume);
+    window.addEventListener('orientationchange', recalibrateAfterRotation);
+    window.screen?.orientation?.addEventListener?.('change', recalibrateAfterRotation);
+    return () => {
+      document.removeEventListener('visibilitychange', recalibrateAfterResume);
+      window.removeEventListener('orientationchange', recalibrateAfterRotation);
+      window.screen?.orientation?.removeEventListener?.('change', recalibrateAfterRotation);
+    };
+  }, [controlMode, startMotionCalibration]);
 
   useEffect(() => {
     const movementKeys = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyA', 'KeyD', 'KeyW', 'KeyS']);
@@ -995,12 +1110,20 @@ export default function App() {
           <p className="control-label">
             {level.mode === 'fall'
               ? controlMode === 'motion'
-                ? '左右倾斜手机选择落点'
+                ? motionStatus === 'ready'
+                  ? '左右倾斜手机选择落点'
+                  : motionStatus === 'timeout'
+                    ? '请暂停后重新校准倾斜'
+                    : '请握稳手机，正在校准方向'
                 : controlMode === 'joystick'
                   ? '左右拖动圆盘选择落点'
                   : '← → / A D 选择落点'
               : controlMode === 'motion'
-                ? '倾斜手机以移动'
+                ? motionStatus === 'ready'
+                  ? '倾斜手机以移动'
+                  : motionStatus === 'timeout'
+                    ? '请暂停后重新校准倾斜'
+                    : '请握稳手机，正在校准方向'
                 : controlMode === 'joystick'
                   ? '拖动左下角圆盘'
                   : '方向键 / WASD'}
@@ -1014,7 +1137,21 @@ export default function App() {
         <StoryBeat beat={storyBeat} onClose={() => setStoryBeat(null)} />
         {paused && (
           <PauseModal
+            motion={controlMode === 'motion'}
+            calibrationStatus={motionStatus}
             onResume={() => setPaused(false)}
+            onRecalibrate={() => {
+              startMotionCalibration(true);
+              setPaused(false);
+            }}
+            onUseTouch={() => {
+              motionStateRef.current = createMotionControlState();
+              inputRef.current.motion = { x: 0, y: 0 };
+              setMotionStatus('idle');
+              setControlMode('joystick');
+              setPaused(false);
+              setToast('已改用触摸圆盘控制。');
+            }}
             onRestart={restart}
             onChapters={() => {
               setPaused(false);

@@ -7,6 +7,7 @@ import {
   canScoreLinkedHoop,
   canTriggerSwitch,
   circleRectCollision,
+  constrainInputByContacts,
   generateFallCourse,
   getFallElapsed,
   getFallGoalY,
@@ -19,6 +20,7 @@ import {
   getActiveFallPlatforms,
   getActiveMirrorZones,
   getMirrorZoneEffects,
+  getTargetAssistVector,
   getPhaseWalls,
   getRotatorWalls,
   isBumperEnabled,
@@ -32,6 +34,7 @@ import {
   rotateRect,
   selectFallRespawnPlatform,
   segmentCrossesHoop,
+  selectAssistTarget,
   transformControlInput,
   updateMirrorZoneMembership,
   updateIdentityRelay,
@@ -48,6 +51,154 @@ test('moves the player without crossing a wall', () => {
   }
   assert.equal(circleRectCollision(ball, wall), false);
   assert.ok(ball.x <= wall.x - ball.radius);
+});
+
+test('uses responsive target velocity without long gyro coasting', () => {
+  const ball = makeBall({ x: 40, y: 40 });
+  for (let index = 0; index < 30; index += 1) {
+    updateBall(ball, { x: 1, y: 0 }, [], 16.667, {
+      motionModel: 'targetVelocity',
+      maxSpeed: 4.1,
+    });
+  }
+  assert.ok(ball.vx > 3.9 && ball.vx <= 4.1);
+
+  let stoppedAfter = null;
+  for (let index = 0; index < 30; index += 1) {
+    updateBall(ball, { x: 0, y: 0 }, [], 16.667, {
+      motionModel: 'targetVelocity',
+      maxSpeed: 4.1,
+    });
+    if (stoppedAfter === null && ball.vx === 0) stoppedAfter = index * 16.667;
+  }
+  assert.ok(stoppedAfter !== null && stoppedAfter < 300);
+});
+
+test('keeps target velocity response stable across common frame rates', () => {
+  const results = [30, 60, 120].map((fps) => {
+    const ball = makeBall({ x: 40, y: 40 });
+    const dt = 1000 / fps;
+    for (let elapsed = 0; elapsed < 500; elapsed += dt) {
+      updateBall(ball, { x: 1, y: 0 }, [], dt, {
+        motionModel: 'targetVelocity',
+        maxSpeed: 4.1,
+      });
+    }
+    for (let elapsed = 0; elapsed < 300; elapsed += dt) {
+      updateBall(ball, { x: 0, y: 0 }, [], dt, {
+        motionModel: 'targetVelocity',
+        maxSpeed: 4.1,
+      });
+    }
+    return ball.x;
+  });
+  assert.ok(Math.max(...results) - Math.min(...results) < 5);
+});
+
+test('auto-stops only when both input and speed are low', () => {
+  const ball = makeBall({ x: 40, y: 40 });
+  ball.vx = 0.13;
+  updateBall(ball, { x: 0, y: 0 }, [], 16.667, {
+    motionModel: 'targetVelocity',
+  });
+  assert.equal(ball.vx, 0);
+
+  ball.vx = 0.13;
+  updateBall(ball, { x: 0.2, y: 0 }, [], 16.667, {
+    motionModel: 'targetVelocity',
+  });
+  assert.notEqual(ball.vx, 0);
+});
+
+test('keeps environmental currents active while gyro input is neutral', () => {
+  const ball = makeBall({ x: 40, y: 40 });
+  updateBall(ball, { x: 0, y: 0 }, [], 16.667, {
+    motionModel: 'targetVelocity',
+    externalForce: { x: 0.8, y: 0 },
+  });
+  assert.ok(ball.vx > 0);
+});
+
+test('suppresses only the input component that presses into a wall', () => {
+  const constrained = constrainInputByContacts(
+    { x: 0.8, y: 0.5 },
+    [{ nx: -1, ny: 0, remaining: 100 }],
+  );
+  assert.ok(Math.abs(constrained.x) < Number.EPSILON);
+  assert.equal(constrained.y, 0.5);
+  assert.deepEqual(
+    constrainInputByContacts(
+      { x: -0.8, y: 0.5 },
+      [{ nx: -1, ny: 0, remaining: 100 }],
+    ),
+    { x: -0.8, y: 0.5 },
+  );
+});
+
+test('remembers a wall briefly and allows immediate reverse escape', () => {
+  const ball = makeBall({ x: 46, y: 50 });
+  const wall = { x: 60, y: 0, w: 18, h: 100 };
+  for (let index = 0; index < 20; index += 1) {
+    updateBall(ball, { x: 1, y: 0 }, [wall], 16.667, {
+      motionModel: 'targetVelocity',
+    });
+  }
+  assert.ok(ball.contacts.some((contact) => contact.nx === -1));
+  const contactX = ball.x;
+  updateBall(ball, { x: -1, y: 0 }, [wall], 16.667, {
+    motionModel: 'targetVelocity',
+  });
+  assert.ok(ball.x < contactX);
+});
+
+test('clears remembered wall contacts when the player respawns', () => {
+  const ball = makeBall({ x: 40, y: 40 });
+  ball.contacts.push({ nx: -1, ny: 0, remaining: 120 });
+  resetBall(ball, { x: 20, y: 20 });
+  assert.deepEqual(ball.contacts, []);
+});
+
+test('selects only visible assist targets in the intended direction', () => {
+  const player = { x: 40, y: 40, radius: 13 };
+  const targets = [
+    { id: 'ahead', x: 70, y: 40, r: 12 },
+    { id: 'side', x: 40, y: 66, r: 12 },
+  ];
+  assert.equal(
+    selectAssistTarget(player, { x: 1, y: 0 }, targets, []).target.id,
+    'ahead',
+  );
+  assert.equal(
+    selectAssistTarget(
+      player,
+      { x: 1, y: 0 },
+      targets,
+      [{ x: 53, y: 20, w: 5, h: 40 }],
+    ),
+    null,
+  );
+});
+
+test('keeps target assistance subtle and disables it at decisive input', () => {
+  const player = { x: 40, y: 40, radius: 13 };
+  const targets = [{ id: 'key', x: 68, y: 40, r: 12 }];
+  const assisted = getTargetAssistVector(
+    player,
+    { x: 0.1, y: 0 },
+    0.5,
+    targets,
+    [],
+  );
+  assert.equal(assisted.target.id, 'key');
+  assert.ok(assisted.x > 0 && assisted.x <= 0.14);
+  assert.deepEqual(
+    getTargetAssistVector(player, { x: 0.8, y: 0 }, 0.5, targets, []),
+    { x: 0, y: 0, target: null },
+  );
+  assert.deepEqual(
+    getTargetAssistVector(player, { x: 0, y: 0 }, 0, targets, []),
+    { x: 0, y: 0, target: null },
+  );
 });
 
 test('lands on fall platforms only while crossing their top edge', () => {
