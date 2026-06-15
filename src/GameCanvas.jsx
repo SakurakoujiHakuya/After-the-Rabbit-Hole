@@ -27,6 +27,8 @@ import {
   isItemAvailable,
   isMirrorControlActive,
   isMoverActive,
+  isPlayerObservedByMovers,
+  isZoneActive,
   isTriggerOccupied,
   makeBall,
   overlapsItem,
@@ -42,6 +44,7 @@ import {
   updateFallPlayer,
   updateStealthAlert,
 } from './gameEngine';
+import { getStealthAlertDuration } from './objectives';
 
 function roundedRect(ctx, x, y, w, h, radius) {
   ctx.beginPath();
@@ -874,9 +877,20 @@ function drawHazard(ctx, hazard, time) {
   ctx.restore();
 }
 
-function drawMover(ctx, mover, art) {
+function drawMover(ctx, mover, art, sightRange = 0) {
   ctx.save();
   ctx.translate(mover.x + mover.w / 2, mover.y + mover.h / 2);
+  if (sightRange && mover.type === 'card') {
+    ctx.strokeStyle = 'rgba(225, 188, 202, .16)';
+    ctx.fillStyle = 'rgba(151, 67, 92, .035)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 8]);
+    ctx.beginPath();
+    ctx.arc(0, 0, sightRange, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
   if (mover.type === 'dodo') {
     ctx.rotate((mover.angle || 0) + Math.PI / 2);
     ctx.shadowColor = 'rgba(116, 92, 137, .56)';
@@ -1171,6 +1185,14 @@ function drawEchoReplay(ctx, echo, avatar, time, delay) {
 
 function drawStealthHud(ctx, alert, hidden) {
   ctx.save();
+  if (!hidden && alert > 0.5) {
+    const intensity = (alert - 0.5) * 2;
+    const warning = ctx.createRadialGradient(180, 320, 180, 180, 320, 390);
+    warning.addColorStop(0, 'transparent');
+    warning.addColorStop(1, `rgba(136, 28, 52, ${0.22 * intensity})`);
+    ctx.fillStyle = warning;
+    ctx.fillRect(0, 0, WORLD.width, WORLD.height);
+  }
   const centerX = 330;
   const centerY = 30;
   ctx.fillStyle = 'rgba(9, 14, 25, .72)';
@@ -1190,6 +1212,12 @@ function drawStealthHud(ctx, alert, hidden) {
   ctx.beginPath();
   ctx.arc(centerX, centerY, hidden ? 2 : 3.2, 0, Math.PI * 2);
   ctx.fill();
+  if (!hidden && alert > 0.5) {
+    ctx.fillStyle = alert > 0.75 ? '#f1a0ae' : '#ead7a9';
+    ctx.font = 'bold 9px serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(alert > 0.75 ? '快躲进雾里' : '纸牌正在看你', centerX - 26, centerY + 3);
+  }
   ctx.restore();
 }
 
@@ -1694,6 +1722,7 @@ function MazeGameCanvas({
   onSwitch,
   onGiftUsed,
   onZoneEnter,
+  onIdentityProgress,
   onDeath,
   onLockedDoor,
   onComplete,
@@ -1708,6 +1737,7 @@ function MazeGameCanvas({
     onSwitch,
     onGiftUsed,
     onZoneEnter,
+    onIdentityProgress,
     onDeath,
     onLockedDoor,
     onComplete,
@@ -1719,6 +1749,7 @@ function MazeGameCanvas({
     onSwitch,
     onGiftUsed,
     onZoneEnter,
+    onIdentityProgress,
     onDeath,
     onLockedDoor,
     onComplete,
@@ -1799,6 +1830,7 @@ function MazeGameCanvas({
       identityCaptureUntil: 0,
       identityPastOccupied: false,
       identityExpiringNotified: false,
+      identityReportedTenths: null,
       zoneActivatedAt: new Map(),
       stealthAlert: 0,
       particles: [],
@@ -1816,6 +1848,8 @@ function MazeGameCanvas({
       stateRef.current.identityCaptureUntil = 0;
       stateRef.current.identityPastOccupied = false;
       stateRef.current.identityExpiringNotified = false;
+      stateRef.current.identityReportedTenths = null;
+      callbacksRef.current.onIdentityProgress?.(0);
     }
   }, [controlMode]);
 
@@ -1845,6 +1879,8 @@ function MazeGameCanvas({
       state.identityCaptureUntil = 0;
       state.identityPastOccupied = false;
       state.identityExpiringNotified = false;
+      state.identityReportedTenths = null;
+      callbacksRef.current.onIdentityProgress?.(0);
       state.stealthAlert = 0;
       state.activeMirrorZoneIds = new Set();
       for (const zone of level.zones || []) {
@@ -1871,10 +1907,7 @@ function MazeGameCanvas({
         : [];
       const resolvedZones = state
         ? (level.zones || [])
-            .filter((zone) => (
-              (!zone.activationSwitch || state.switches.has(zone.activationSwitch)) &&
-              !(zone.disabledBySwitches || []).some((id) => state.switches.has(id))
-            ))
+            .filter((zone) => isZoneActive(zone, state))
             .map((zone) => (
               zone.waypoints
                 ? getMovingZoneRect(zone, time - (state.zoneActivatedAt.get(zone.id) || time))
@@ -2278,6 +2311,11 @@ function MazeGameCanvas({
           state.identityPastOccupied = pastOccupied;
           state.identityCaptureUntil = relay.capturedUntil;
           state.identityExpiringNotified = relay.expiringNotified;
+          const remainingTenths = Math.ceil(relay.remaining / 100) / 10;
+          if (state.identityReportedTenths !== remainingTenths) {
+            state.identityReportedTenths = remainingTenths;
+            callbacksRef.current.onIdentityProgress?.(remainingTenths);
+          }
 
           if (relay.event === 'captured') {
             spawnBurst(state, pastTrigger.x, pastTrigger.y, '#bceafa', 14);
@@ -2318,11 +2356,24 @@ function MazeGameCanvas({
           (zone) => zone.waypoints && zone.effect === 'vanish',
         );
         if (level.stealthConfig && movingFogActive) {
+          const observed = isPlayerObservedByMovers(
+            state.player,
+            movers,
+            collisionWalls,
+            level.stealthConfig.sightRange,
+          );
           state.stealthAlert = updateStealthAlert(
             state.stealthAlert,
             mirrorZoneEffects.vanish,
             dt,
-            level.stealthConfig,
+            {
+              ...level.stealthConfig,
+              alertDuration: getStealthAlertDuration(
+                level.stealthConfig,
+                state.switches,
+              ),
+              observed,
+            },
           );
           if (state.stealthAlert >= 1) die(state, 'alert', time);
         } else {
@@ -2399,7 +2450,12 @@ function MazeGameCanvas({
         const turn = state?.rotations.get(rotator.id) || 0;
         drawRotator(ctx, rotator, getRotatorWalls(rotator, turn), turn, time, artRef.current);
       });
-      movers.forEach((mover) => drawMover(ctx, mover, artRef.current));
+      movers.forEach((mover) => drawMover(
+        ctx,
+        mover,
+        artRef.current,
+        level.stealthConfig?.sightRange || 0,
+      ));
       (level.bumpers || []).forEach((bumper) => {
         const target = (level.switches || []).find((entry) => entry.id === bumper.targetHoopId);
         const active = state ? isBumperEnabled(bumper, state.switches) : false;

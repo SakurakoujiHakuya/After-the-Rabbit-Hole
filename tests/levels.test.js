@@ -420,10 +420,23 @@ test('adds Alice-themed common chapters by recombining existing mechanics', () =
   ]);
   assert.equal(race.zones.filter((zone) => zone.type === 'current').length, 4);
   assert.ok(race.movers.every((mover) => mover.type === 'dodo' && mover.path === 'orbit'));
+  assert.ok(race.sequenceResetMessage.includes('赛点'));
+  assert.ok(race.items.find((item) => item.id === 'caucus-thimble').label);
+  assert.deepEqual(
+    race.switches.map((trigger) => trigger.label),
+    ['一号赛点', '二号赛点', '三号赛点', '终点赛点'],
+  );
   assert.deepEqual(race.next, ['caterpillar-crossroad']);
 
   const kitchen = levelById['duchess-kitchen'];
   assert.ok(kitchen.zones.every((zone) => zone.palette === 'pepper'));
+  assert.ok(kitchen.zones.every((zone) => (
+    zone.disabledByItems?.includes('kitchen-fan')
+  )));
+  assert.equal(
+    kitchen.items.find((item) => item.id === 'kitchen-fan').label,
+    '厨房折扇',
+  );
   assert.ok(kitchen.movers.every((mover) => mover.type === 'plate'));
   assert.deepEqual(kitchen.next, ['cheshire-wood']);
   assert.ok(
@@ -562,6 +575,17 @@ test('builds three ordered cheshire fog escorts with staged card groups', () => 
   ]);
   assert.equal(level.zones.length, 3);
   assert.equal(level.movers.length, 9);
+  assert.deepEqual(level.stealthConfig.stageDurations, {
+    moon: 2000,
+    sun: 1600,
+    exit: 1300,
+  });
+  assert.ok(level.stealthConfig.sightRange >= 100);
+  assert.ok(
+    level.items
+      .filter((item) => item.type === 'smile')
+      .every((item) => item.label),
+  );
   assert.ok(level.zones.every((zone) => (
     zone.effect === 'vanish' &&
     zone.shape === 'ellipse' &&
@@ -851,6 +875,21 @@ test('defines valid ordered switches and orbit hazards', () => {
       for (const key of ['centerX', 'centerY', 'radiusX', 'radiusY', 'speed']) {
         assert.equal(Number.isFinite(mover[key]), true, `${level.id} ${mover.id} has invalid ${key}`);
       }
+    }
+  }
+});
+
+test('gives every required item and switch a specific objective label', () => {
+  for (const level of levels) {
+    for (const id of level.goal.requires?.items || []) {
+      const item = level.items?.find((entry) => entry.id === id);
+      assert.ok(item?.label, `${level.id} ${id} needs an objective label`);
+      assert.notEqual(item.label, '道具');
+    }
+    for (const id of level.goal.requires?.switches || []) {
+      const trigger = level.switches?.find((entry) => entry.id === id);
+      assert.ok(trigger?.label, `${level.id} ${id} needs an objective label`);
+      assert.notEqual(trigger.label, '印章');
     }
   }
 });

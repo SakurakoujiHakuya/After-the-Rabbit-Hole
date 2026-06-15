@@ -695,6 +695,23 @@ button {
   box-shadow: 0 0 10px rgba(225, 194, 111, .14);
 }
 
+.objective-strip span.current {
+  border-color: rgba(159, 211, 235, .78);
+  color: #d8eff8;
+  box-shadow: 0 0 12px rgba(126, 195, 225, .22);
+  transform: translateY(-1px);
+}
+
+.objective-strip span.next {
+  color: rgba(230, 219, 190, .7);
+}
+
+.objective-strip span.identity-timer {
+  border-color: rgba(156, 210, 235, .62);
+  color: #c8e8f4;
+  box-shadow: 0 0 12px rgba(126, 195, 225, .16);
+}
+
 .secondary-start-button,
 .quiet-button {
   display: block;

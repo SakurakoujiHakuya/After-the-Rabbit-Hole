@@ -18,6 +18,8 @@ import {
   timeoutMotionCalibration,
   updateMotionControl,
 } from './motionControls';
+import { getCollectionMessage, getDeathMessage } from './gameFeedback';
+import { getStagedObjectives } from './objectives';
 
 const debugLevelId = import.meta.env.DEV
   ? new URLSearchParams(window.location.search).get('level')
@@ -271,7 +273,7 @@ function Joystick({ gravityRef, horizontalOnly = false }) {
 }
 
 function PauseModal({
-  motion,
+  controlMode,
   calibrationStatus,
   onResume,
   onRecalibrate,
@@ -285,7 +287,7 @@ function PauseModal({
       <section className="paper-modal compact">
         <p className="kicker">A SMALL PAUSE</p>
         <h2>世界暂时<br />停止倾斜</h2>
-        {motion && (
+        {controlMode === 'motion' && (
           <p className={`calibration-status ${calibrationStatus}`}>
             {calibrationStatus === 'ready'
               ? '倾斜方向已经校准'
@@ -295,11 +297,13 @@ function PauseModal({
           </p>
         )}
         <button className="primary-button" onClick={onResume}>继续寻找</button>
-        {motion && (
+        {controlMode === 'motion' && (
           <>
             <button className="secondary-button" onClick={onRecalibrate}>重新校准倾斜</button>
-            <button className="secondary-button" onClick={onUseTouch}>改用触摸控制</button>
           </>
+        )}
+        {controlMode !== 'joystick' && (
+          <button className="secondary-button" onClick={onUseTouch}>改用触摸控制</button>
         )}
         <button className="secondary-button" onClick={onRestart}>重新开始本关</button>
         <button className="secondary-button" onClick={onChapters}>章节书签</button>
@@ -445,7 +449,14 @@ export default function App() {
   const [permissionError, setPermissionError] = useState('');
   const [musicMuted, setMusicMuted] = useState(false);
   const [musicPlaying, setMusicPlaying] = useState(false);
-  const [controlMode, setControlMode] = useState('keyboard');
+  const [controlMode, setControlMode] = useState(() => (
+    debugLevelId && (
+      navigator.maxTouchPoints > 0 ||
+      window.matchMedia?.('(pointer: coarse)').matches
+    )
+      ? 'joystick'
+      : 'keyboard'
+  ));
   const [motionStatus, setMotionStatus] = useState('idle');
   const [progress, setProgress] = useState(loadProgress);
   const [levelId, setLevelId] = useState(() => debugLevelId || loadProgress().currentLevelId);
@@ -465,6 +476,7 @@ export default function App() {
   const [painted, setPainted] = useState([]);
   const [runDeaths, setRunDeaths] = useState(0);
   const [lastResult, setLastResult] = useState(null);
+  const [identityRemaining, setIdentityRemaining] = useState(0);
   const inputRef = useRef({
     motion: { x: 0, y: 0 },
     keyboard: { x: 0, y: 0 },
@@ -477,6 +489,14 @@ export default function App() {
   const level = useMemo(
     () => getPlayableLevel(levelId, progress.choices),
     [levelId, progress.choices],
+  );
+  const stagedObjectives = useMemo(
+    () => getStagedObjectives(
+      level,
+      collected.map((item) => item.id),
+      activated,
+    ),
+    [activated, collected, level],
   );
 
   const startMotionCalibration = useCallback((preserveNeutral = true) => {
@@ -539,6 +559,7 @@ export default function App() {
     setPhases({});
     setPainted([]);
     setRunDeaths(0);
+    setIdentityRemaining(0);
     setLastResult(null);
     setStoryIndex(0);
     setStoryOpen(Boolean(getLevel(targetLevelId).story?.length));
@@ -743,23 +764,7 @@ export default function App() {
       setProgress((current) => collectCuriosity(current, level.id, item.id));
     }
     if (navigator.vibrate) navigator.vibrate(30);
-    const messages = {
-      key: '钥匙在你手里轻轻响了一声。',
-      potion: '你变小了。世界没有。',
-      cookie: '你变大了，连规则也开始后退。',
-      fragment: `她想起了：“${item.word}”`,
-      checkpoint: '红玫瑰记住了你的位置。',
-      paint: '爱丽丝提起了红色油漆桶。',
-      timepiece: '帽匠借出的怀表停住了巡逻机关。',
-      fan: '白兔的折扇吹开了一条过分狭窄的路。',
-      smile: '微笑留了下来，猫却仍然不见踪影。',
-      mirrorShard: item.releasesMirror
-        ? '定向镜片归位了。左与右终于重新同意彼此。'
-        : '一枚倒影碎片从镜层里脱落下来。',
-      shield: '支线留下的纪念物正保护着你。',
-      curiosity: '你找到了一枚藏起来的兔子浮雕。',
-    };
-    setToast(messages[item.type] || '机关发出了一声轻响。');
+    setToast(getCollectionMessage(item));
     revealStoryEvent(`collect:${item.id}`);
     revealStoryEvent(`collect:${item.type}`);
     emitEvent('item_collected', { levelId: level.id, itemType: item.type });
@@ -822,7 +827,7 @@ export default function App() {
           : trigger.phaseOffMessage || '黑棋醒来，身后的路被镜面封住。'),
       );
     } else if (trigger.sequenceStatus === 'reset') {
-      setToast('顺序错了。镜子把所有印章熄灭了。');
+      setToast(level.sequenceResetMessage || '顺序错了。所有印章重新沉睡。');
     } else if (trigger.sequenceStatus === 'complete') {
       setToast(trigger.action === 'hoop' ? '第三道球门得分，女王的终点门被迫打开。' : '最后一枚印章回应了你。');
     } else if (trigger.sequenceStatus === 'correct') {
@@ -874,16 +879,7 @@ export default function App() {
   const handleDeath = (reason) => {
     setProgress((current) => recordDeath(current, level.id));
     setRunDeaths((count) => count + 1);
-    const messages = {
-      card: '纸牌卫兵把你送回了玫瑰旁。',
-      watch: '怀表追上了你，时间重新开始。',
-      hazard: '漩涡把方向揉成了一团。',
-      alert: '纸牌看清了你。柴郡猫把你送回最近的灯笼。',
-      spikes: '三颗心都碎了。兔子洞把你送回了最初的落点。',
-      top: '洞顶的尖刺耗尽了三颗心。平台重新洗牌。',
-      fall: '你坠过了兔子洞的边界，只好从顶部重新寻找落点。',
-    };
-    setToast(messages[reason] || messages.hazard);
+    setToast(getDeathMessage(reason, level));
     if (navigator.vibrate) navigator.vibrate(90);
   };
 
@@ -942,6 +938,7 @@ export default function App() {
     setPhases({});
     setPainted([]);
     setRunDeaths(0);
+    setIdentityRemaining(0);
     setLastResult(null);
     setStoryIndex(0);
     setStoryOpen(Boolean(getLevel(nextLevelId).story?.length));
@@ -1025,6 +1022,7 @@ export default function App() {
             onSwitch={handleSwitch}
             onGiftUsed={handleGiftUsed}
             onZoneEnter={handleZoneEnter}
+            onIdentityProgress={setIdentityRemaining}
             onDamage={handleDamage}
             onDeath={handleDeath}
             onLockedDoor={() => setToast(level.lockedHint || '门仍在等待缺少的证据。')}
@@ -1040,24 +1038,43 @@ export default function App() {
           <div className="hint-line"><span>✦</span><p>{level.hint}</p><span>✦</span></div>
           {(level.goal.requires || level.items?.some((item) => item.type === 'curiosity')) && (
             <div className="objective-strip" aria-label="当前目标">
-              {(level.goal.requires?.items || []).map((id) => (
-                <span key={id} className={collected.some((item) => item.id === id) ? 'done' : ''}>
-                  {collected.some((item) => item.id === id) ? '✓' : '◇'} {
-                    level.items?.find((item) => item.id === id)?.label || '道具'
-                  }
+              {stagedObjectives.length > 0 ? stagedObjectives.map((objective, index) => (
+                <span
+                  key={objective.id}
+                  className={[
+                    objective.done ? 'done' : '',
+                    objective.current ? 'current' : '',
+                    objective.next ? 'next' : '',
+                  ].filter(Boolean).join(' ')}
+                >
+                  {objective.done ? '✓' : objective.current ? '→' : index + 1} {objective.label}
                 </span>
-              ))}
-              {(level.goal.requires?.switches || []).map((id, index) => {
-                const trigger = level.switches?.find((entry) => entry.id === id);
-                const label = trigger?.label || (trigger?.action === 'hoop'
-                  ? '球门'
-                  : trigger?.action === 'phase' ? '棋子' : '印章');
-                return (
-                  <span key={id} className={activated.includes(id) ? 'done' : ''}>
-                    {activated.includes(id) ? '✓' : level.switchSequence ? index + 1 : '○'} {label}
-                  </span>
-                );
-              })}
+              )) : (
+                <>
+                  {(level.goal.requires?.items || []).map((id) => (
+                    <span key={id} className={collected.some((item) => item.id === id) ? 'done' : ''}>
+                      {collected.some((item) => item.id === id) ? '✓' : '◇'} {
+                        level.items?.find((item) => item.id === id)?.label
+                      }
+                    </span>
+                  ))}
+                  {(level.goal.requires?.switches || []).map((id, index) => {
+                    const trigger = level.switches?.find((entry) => entry.id === id);
+                    return (
+                      <span key={id} className={activated.includes(id) ? 'done' : ''}>
+                        {activated.includes(id) ? '✓' : level.switchSequence ? index + 1 : '○'} {
+                          trigger?.label
+                        }
+                      </span>
+                    );
+                  })}
+                </>
+              )}
+              {level.echoReplay && identityRemaining > 0 && (
+                <span className="identity-timer">
+                  ◷ 过去 {identityRemaining.toFixed(1)}s
+                </span>
+              )}
               {level.goal.requires?.fragments && (
                 <span className={fragmentItems.length >= level.goal.requires.fragments ? 'done' : ''}>
                   {fragmentItems.length}/{level.goal.requires.fragments} 名字
@@ -1137,7 +1154,7 @@ export default function App() {
         <StoryBeat beat={storyBeat} onClose={() => setStoryBeat(null)} />
         {paused && (
           <PauseModal
-            motion={controlMode === 'motion'}
+            controlMode={controlMode}
             calibrationStatus={motionStatus}
             onResume={() => setPaused(false)}
             onRecalibrate={() => {

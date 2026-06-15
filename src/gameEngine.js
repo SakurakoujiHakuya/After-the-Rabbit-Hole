@@ -145,6 +145,20 @@ export function isItemAvailable(item, state) {
   return phaseReady && switchReady;
 }
 
+export function isZoneActive(zone, state) {
+  const hasActivation = (
+    !zone.activationSwitch ||
+    state.switches.has(zone.activationSwitch)
+  );
+  const disabledBySwitch = (zone.disabledBySwitches || []).some(
+    (id) => state.switches.has(id),
+  );
+  const disabledByItem = (zone.disabledByItems || []).some(
+    (id) => state.collected.has(id),
+  );
+  return hasActivation && !disabledBySwitch && !disabledByItem;
+}
+
 export function isMirrorControlActive(config, state) {
   if (!config?.invertX) return false;
   return !config.releaseItem || !state.collected?.has(config.releaseItem);
@@ -273,11 +287,32 @@ export function isMoverActive(mover, switches) {
 export function updateStealthAlert(current, hidden, dt, config = {}) {
   const duration = config.alertDuration ?? 1200;
   const recoveryMultiplier = config.recoveryMultiplier ?? 2;
+  const observed = config.observed ?? true;
   const delta = dt / duration;
   return Math.max(
     0,
-    Math.min(1, current + (hidden ? -delta * recoveryMultiplier : delta)),
+    Math.min(
+      1,
+      current + (hidden || !observed ? -delta * recoveryMultiplier : delta),
+    ),
   );
+}
+
+export function isPlayerObservedByMovers(
+  player,
+  movers,
+  walls = [],
+  sightRange = 115,
+) {
+  return (movers || []).some((mover) => {
+    const target = {
+      x: mover.x + mover.w / 2,
+      y: mover.y + mover.h / 2,
+    };
+    const distance = Math.hypot(target.x - player.x, target.y - player.y);
+    if (distance > sightRange) return false;
+    return !segmentBlockedByWalls(player, target, walls, player.radius, 0);
+  });
 }
 
 export function transformControlInput(

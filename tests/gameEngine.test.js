@@ -27,8 +27,10 @@ import {
   isItemAvailable,
   isMirrorControlActive,
   isMoverActive,
+  isPlayerObservedByMovers,
   isSimultaneousGroupOccupied,
   isTriggerOccupied,
+  isZoneActive,
   makeBall,
   requirementsMet,
   resetBall,
@@ -118,6 +120,17 @@ test('keeps environmental currents active while gyro input is neutral', () => {
     externalForce: { x: 0.8, y: 0 },
   });
   assert.ok(ball.vx > 0);
+});
+
+test('lets collected story items disable environmental zones', () => {
+  const zone = { disabledByItems: ['kitchen-fan'] };
+  const state = {
+    collected: new Set(),
+    switches: new Set(),
+  };
+  assert.equal(isZoneActive(zone, state), true);
+  state.collected.add('kitchen-fan');
+  assert.equal(isZoneActive(zone, state), false);
 });
 
 test('suppresses only the input component that presses into a wall', () => {
@@ -577,6 +590,33 @@ test('activates staged cards and recovers alert inside cat fog', () => {
       recoveryMultiplier: 2,
     }),
     0,
+  );
+  assert.equal(
+    updateStealthAlert(0.5, false, 300, {
+      alertDuration: 1200,
+      recoveryMultiplier: 2,
+      observed: false,
+    }),
+    0,
+  );
+});
+
+test('raises stealth alert only for an unobstructed nearby card', () => {
+  const player = { x: 40, y: 40, radius: 13 };
+  const mover = { x: 90, y: 30, w: 20, h: 20 };
+  assert.equal(isPlayerObservedByMovers(player, [mover], [], 80), true);
+  assert.equal(
+    isPlayerObservedByMovers(
+      player,
+      [mover],
+      [{ x: 64, y: 20, w: 8, h: 40 }],
+      80,
+    ),
+    false,
+  );
+  assert.equal(
+    isPlayerObservedByMovers(player, [{ ...mover, x: 180 }], [], 80),
+    false,
   );
 });
 

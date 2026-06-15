@@ -96,11 +96,11 @@ const levelList = [
     },
     next: ['white-rabbit-house'],
     items: [
-      { id: 'gold-key', type: 'key', x: 292, y: 548, r: 12 },
+      { id: 'gold-key', type: 'key', label: '金钥匙', x: 292, y: 548, r: 12 },
       { id: 'cameo-hall', type: 'curiosity', x: 302, y: 262, r: 11 },
     ],
     switches: [
-      { id: 'rose-seal', activationMode: 'once', x: 58, y: 174, r: 18 },
+      { id: 'rose-seal', activationMode: 'once', label: '玫瑰印章', x: 58, y: 174, r: 18 },
     ],
     gates: [{ id: 'rose-gate', switchId: 'rose-seal', x: 150, y: 112, w: 34, h: 112 }],
     walls: [
@@ -160,7 +160,7 @@ const levelList = [
     next: ['pool-of-tears'],
     items: [
       { id: 'house-potion', type: 'potion', x: 292, y: 548, r: 13 },
-      { id: 'rabbit-fan', type: 'fan', x: 58, y: 244, r: 13 },
+      { id: 'rabbit-fan', type: 'fan', label: '白兔折扇', x: 58, y: 244, r: 13 },
       { id: 'house-checkpoint', type: 'checkpoint', x: 180, y: 350, r: 12 },
       { id: 'cameo-house', type: 'curiosity', x: 298, y: 438, r: 11 },
     ],
@@ -168,6 +168,7 @@ const levelList = [
       {
         id: 'tiny-latch',
         activationMode: 'once',
+        label: '低门闩',
         symbol: '⌑',
         x: 300,
         y: 148,
@@ -291,10 +292,12 @@ const levelList = [
     },
     next: ['caterpillar-crossroad'],
     switchSequence: ['caucus-one', 'caucus-two', 'caucus-three', 'caucus-finish'],
+    sequenceResetMessage: '赛点顺序乱了。渡渡鸟挥挥翅膀，让比赛重新开始。',
     items: [
       {
         id: 'caucus-thimble',
         type: 'thimble',
+        label: '银顶针',
         x: 220,
         y: 560,
         r: 12,
@@ -303,10 +306,10 @@ const levelList = [
       { id: 'cameo-caucus', type: 'curiosity', x: 180, y: 90, r: 11 },
     ],
     switches: [
-      { id: 'caucus-one', activationMode: 'once', symbol: '1', x: 66, y: 520, r: 18 },
-      { id: 'caucus-two', activationMode: 'once', symbol: '2', x: 66, y: 122, r: 18 },
-      { id: 'caucus-three', activationMode: 'once', symbol: '3', x: 294, y: 122, r: 18 },
-      { id: 'caucus-finish', activationMode: 'once', symbol: '4', x: 310, y: 450, r: 18 },
+      { id: 'caucus-one', activationMode: 'once', label: '一号赛点', symbol: '1', x: 66, y: 520, r: 18 },
+      { id: 'caucus-two', activationMode: 'once', label: '二号赛点', symbol: '2', x: 66, y: 122, r: 18 },
+      { id: 'caucus-three', activationMode: 'once', label: '三号赛点', symbol: '3', x: 294, y: 122, r: 18 },
+      { id: 'caucus-finish', activationMode: 'once', label: '终点赛点', symbol: '4', x: 310, y: 450, r: 18 },
     ],
     zones: [
       { type: 'current', palette: 'race', x: 28, y: 106, w: 82, h: 414, forceX: 0, forceY: -0.5 },
@@ -357,7 +360,7 @@ const levelList = [
     name: '你是谁？',
     mechanic: '过去倒影与身份印章',
     parTime: 80000,
-    hint: '让过去踩亮左印章，四秒内赶到右边回应她',
+    hint: '先走过左侧，让两秒后的倒影踩亮“过去”；亮起后四秒内赶到右侧回应她',
     quote: '毛毛虫只问了三个字：“你是谁？” 她却没有答案。',
     story: [
       {
@@ -490,6 +493,7 @@ const levelList = [
       {
         id: 'heavy-cap',
         activationMode: 'once',
+        label: '重量蘑菇',
         x: 290,
         y: 155,
         r: 20,
@@ -547,7 +551,7 @@ const levelList = [
     next: ['duchess-kitchen'],
     legacyNext: ['cheshire-wood'],
     items: [
-      { id: 'watch-hand', type: 'key', x: 180, y: 140, r: 12 },
+      { id: 'watch-hand', type: 'key', label: '怀表指针', x: 180, y: 140, r: 12 },
       { id: 'cameo-tea', type: 'curiosity', x: 286, y: 456, r: 11 },
     ],
     decorations: [
@@ -676,14 +680,23 @@ const levelList = [
       },
     ],
     items: [
-      { id: 'kitchen-fan', type: 'fan', x: 300, y: 250, r: 13 },
-      { id: 'kitchen-checkpoint', type: 'checkpoint', x: 60, y: 380, r: 12 },
+      { id: 'kitchen-fan', type: 'fan', label: '厨房折扇', x: 300, y: 250, r: 13 },
+      {
+        id: 'kitchen-checkpoint',
+        type: 'checkpoint',
+        label: '汤锅检查点',
+        collectMessage: '汤锅记住了你的位置。再被飞盘击中时会从这里回来。',
+        x: 60,
+        y: 380,
+        r: 12,
+      },
       { id: 'cameo-kitchen', type: 'curiosity', x: 58, y: 72, r: 11 },
     ],
     switches: [
       {
         id: 'chimney-latch',
         activationMode: 'once',
+        label: '烟囱门闩',
         symbol: '♨',
         x: 300,
         y: 150,
@@ -691,8 +704,8 @@ const levelList = [
       },
     ],
     zones: [
-      { type: 'current', palette: 'pepper', x: 34, y: 414, w: 292, h: 70, forceX: 0.72, forceY: -0.04 },
-      { type: 'current', palette: 'pepper', x: 34, y: 214, w: 292, h: 70, forceX: -0.76, forceY: -0.05 },
+      { type: 'current', palette: 'pepper', x: 34, y: 414, w: 292, h: 70, forceX: 0.72, forceY: -0.04, disabledByItems: ['kitchen-fan'] },
+      { type: 'current', palette: 'pepper', x: 34, y: 214, w: 292, h: 70, forceX: -0.76, forceY: -0.05, disabledByItems: ['kitchen-fan'] },
     ],
     movers: [
       { id: 'kitchen-plate-1', type: 'plate', x: 130, y: 440, w: 30, h: 30, axis: 'x', range: 112, speed: 0.0019 },
@@ -764,8 +777,14 @@ const levelList = [
     },
     next: ['queen-garden'],
     stealthConfig: {
-      alertDuration: 1200,
+      alertDuration: 1600,
       recoveryMultiplier: 2,
+      sightRange: 108,
+      stageDurations: {
+        moon: 2000,
+        sun: 1600,
+        exit: 1300,
+      },
     },
     stealthRoute: [
       'moon-lantern',
@@ -795,6 +814,7 @@ const levelList = [
       {
         id: 'moon-smile',
         type: 'smile',
+        label: '月光微笑',
         color: '#c8b5ec',
         x: 60,
         y: 350,
@@ -804,6 +824,7 @@ const levelList = [
       {
         id: 'sun-smile',
         type: 'smile',
+        label: '阳光微笑',
         color: '#f0d68c',
         x: 300,
         y: 150,
@@ -986,7 +1007,7 @@ const levelList = [
       },
     ],
     items: [
-      { id: 'red-paint', type: 'paint', x: 100, y: 568, r: 13 },
+      { id: 'red-paint', type: 'paint', label: '红色油漆', x: 100, y: 568, r: 13 },
       { id: 'cameo-queen', type: 'curiosity', x: 180, y: 452, r: 11 },
     ],
     paintables: [
@@ -1219,6 +1240,7 @@ const levelList = [
         id: 'croquet-hoop-1',
         action: 'hoop',
         activationMode: 'once',
+        label: '一号球门',
         order: 1,
         requiresBumper: 'flamingo-1',
         orientation: 'vertical',
@@ -1232,6 +1254,7 @@ const levelList = [
         id: 'croquet-hoop-2',
         action: 'hoop',
         activationMode: 'once',
+        label: '二号球门',
         order: 2,
         requiresBumper: 'flamingo-2',
         orientation: 'vertical',
@@ -1245,6 +1268,7 @@ const levelList = [
         id: 'croquet-hoop-3',
         action: 'hoop',
         activationMode: 'once',
+        label: '三号球门',
         order: 3,
         requiresBumper: 'flamingo-3',
         orientation: 'vertical',
@@ -1404,15 +1428,15 @@ const levelList = [
       },
     ],
     items: [
-      { id: 'parade-pass', type: 'key', x: 180, y: 270, r: 12 },
+      { id: 'parade-pass', type: 'key', label: '游行通行证', x: 180, y: 270, r: 12 },
       { id: 'procession-checkpoint', type: 'checkpoint', x: 300, y: 366, r: 12 },
       { id: 'cameo-procession', type: 'curiosity', x: 58, y: 72, r: 11 },
     ],
     switches: [
-      { id: 'suit-heart', activationMode: 'once', label: '花色', symbol: '♥', x: 58, y: 548, r: 18 },
-      { id: 'suit-spade', activationMode: 'once', label: '花色', symbol: '♠', x: 58, y: 360, r: 18 },
-      { id: 'suit-diamond', activationMode: 'once', label: '花色', symbol: '♦', x: 300, y: 270, r: 18 },
-      { id: 'suit-club', activationMode: 'once', label: '花色', symbol: '♣', x: 58, y: 174, r: 18 },
+      { id: 'suit-heart', activationMode: 'once', label: '红心', symbol: '♥', x: 58, y: 548, r: 18 },
+      { id: 'suit-spade', activationMode: 'once', label: '黑桃', symbol: '♠', x: 58, y: 360, r: 18 },
+      { id: 'suit-diamond', activationMode: 'once', label: '方片', symbol: '♦', x: 300, y: 270, r: 18 },
+      { id: 'suit-club', activationMode: 'once', label: '梅花', symbol: '♣', x: 58, y: 174, r: 18 },
     ],
     movers: [
       { id: 'parade-card-1', type: 'card', x: 70, y: 448, w: 48, h: 15, axis: 'x', range: 200, speed: 0.0016 },
@@ -1547,7 +1571,7 @@ const levelList = [
       { id: 'cameo-trial', type: 'curiosity', x: 300, y: 294, r: 11 },
     ],
     switches: [
-      { id: 'verdict', activationMode: 'once', x: 300, y: 170, r: 18 },
+      { id: 'verdict', activationMode: 'once', label: '证词印章', x: 300, y: 170, r: 18 },
       {
         id: 'court-crank',
         action: 'rotate',
