@@ -127,6 +127,7 @@ function visualRadius(entity, kind) {
     smile: 16,
     shield: 15,
     key: 15,
+    thimble: 15,
   }[entity.type] || entity.r || 12;
 }
 
@@ -367,7 +368,7 @@ test('uses valid references throughout the chapter graph', () => {
   }
 });
 
-test('builds eleven-chapter playthroughs for every branch combination', () => {
+test('builds thirteen-chapter playthroughs for every branch combination', () => {
   for (const earlyChoice of ['mushroom', 'tea']) {
     for (const lateChoice of ['mirror', 'croquet']) {
       const choices = {
@@ -382,8 +383,10 @@ test('builds eleven-chapter playthroughs for every branch combination', () => {
         const choice = level.choices?.find((entry) => entry.id === choices[level.id]);
         level = levelById[choice?.next || level.next?.[0]];
       }
-      assert.equal(route.length, 11, `${earlyChoice}/${lateChoice} route has the wrong length`);
+      assert.equal(route.length, 13, `${earlyChoice}/${lateChoice} route has the wrong length`);
       assert.ok(route.includes('white-rabbit-house'));
+      assert.ok(route.includes('caucus-race'));
+      assert.ok(route.includes('duchess-kitchen'));
       assert.ok(route.includes('cheshire-wood'));
       assert.ok(route.includes('card-procession'));
       assert.equal(route.at(-1), 'trial-of-names');
@@ -405,6 +408,28 @@ test('keeps the white rabbit size tutorial solvable at each body size', () => {
   assert.equal(canReach(level, {}, fan, {}, potion, 7), true);
   assert.equal(canReach(level, {}, latch, {}, fan, 7), true);
   assert.equal(canReach(level, {}, goal, {}, latch, 7), true);
+});
+
+test('adds Alice-themed common chapters by recombining existing mechanics', () => {
+  const race = levelById['caucus-race'];
+  assert.deepEqual(race.switchSequence, [
+    'caucus-one',
+    'caucus-two',
+    'caucus-three',
+    'caucus-finish',
+  ]);
+  assert.equal(race.zones.filter((zone) => zone.type === 'current').length, 4);
+  assert.ok(race.movers.every((mover) => mover.type === 'dodo' && mover.path === 'orbit'));
+  assert.deepEqual(race.next, ['caterpillar-crossroad']);
+
+  const kitchen = levelById['duchess-kitchen'];
+  assert.ok(kitchen.zones.every((zone) => zone.palette === 'pepper'));
+  assert.ok(kitchen.movers.every((mover) => mover.type === 'plate'));
+  assert.deepEqual(kitchen.next, ['cheshire-wood']);
+  assert.ok(
+    levelById['mushroom-forest'].next.includes(kitchen.id) &&
+    levelById['mad-tea-party'].next.includes(kitchen.id),
+  );
 });
 
 test('keeps the paper-card suit sequence reachable in its required order', () => {
@@ -754,6 +779,15 @@ test('carries branch-specific gifts into the shared finale', () => {
 });
 
 test('reuses branch gifts in the new common chapters', () => {
+  const kitchenMushroom = getPlayableLevel('duchess-kitchen', {
+    'caterpillar-crossroad': 'mushroom',
+  });
+  const kitchenTea = getPlayableLevel('duchess-kitchen', {
+    'caterpillar-crossroad': 'tea',
+  });
+  assert.ok(kitchenMushroom.items.some((item) => item.id === 'kitchen-mushroom-gift'));
+  assert.ok(kitchenTea.items.some((item) => item.id === 'kitchen-watch-gift'));
+
   const forestMushroom = getPlayableLevel('cheshire-wood', {
     'caterpillar-crossroad': 'mushroom',
   });

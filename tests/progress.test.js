@@ -107,6 +107,7 @@ test('unlocks newly inserted chapters from completed legacy predecessors', () =>
   }));
   const migrated = loadProgress();
   assert.ok(migrated.unlocked.includes('white-rabbit-house'));
+  assert.ok(migrated.unlocked.includes('duchess-kitchen'));
   assert.ok(migrated.unlocked.includes('cheshire-wood'));
   assert.ok(migrated.unlocked.includes('card-procession'));
 });

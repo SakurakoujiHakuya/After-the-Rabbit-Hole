@@ -162,9 +162,14 @@ function drawZone(ctx, zone, time) {
       }
     }
   } else if (zone.type === 'current') {
-    ctx.fillStyle = 'rgba(73, 139, 181, .17)';
+    const pepper = zone.palette === 'pepper';
+    ctx.fillStyle = pepper
+      ? 'rgba(207, 177, 91, .14)'
+      : 'rgba(73, 139, 181, .17)';
     ctx.fillRect(zone.x, zone.y, zone.w, zone.h);
-    ctx.strokeStyle = 'rgba(151, 211, 232, .35)';
+    ctx.strokeStyle = pepper
+      ? 'rgba(238, 215, 147, .4)'
+      : 'rgba(151, 211, 232, .35)';
     ctx.lineWidth = 1.5;
     const direction = Math.sign(Math.abs(zone.forceX) > Math.abs(zone.forceY) ? zone.forceX : zone.forceY);
     for (let i = 0; i < 5; i += 1) {
@@ -174,6 +179,18 @@ function drawZone(ctx, zone, time) {
       ctx.moveTo(zone.x + shift, y);
       ctx.lineTo(zone.x + shift + 18 * direction, y);
       ctx.stroke();
+    }
+    if (pepper) {
+      ctx.fillStyle = 'rgba(245, 224, 158, .46)';
+      for (let index = 0; index < 18; index += 1) {
+        const x = zone.x + (
+          (index * 47 + time * 0.028 * direction) % zone.w + zone.w
+        ) % zone.w;
+        const y = zone.y + 8 + ((index * 29) % Math.max(12, zone.h - 16));
+        ctx.beginPath();
+        ctx.arc(x, y, 1 + (index % 3) * 0.45, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   } else if (zone.type === 'ice') {
     ctx.fillStyle = 'rgba(192, 218, 234, .16)';
@@ -394,6 +411,32 @@ function drawItem(ctx, item, time, art) {
       ctx.lineTo(x, -11);
       ctx.stroke();
     }
+  } else if (item.type === 'thimble') {
+    ctx.shadowColor = '#d7c7a0';
+    ctx.fillStyle = '#b9ad99';
+    ctx.strokeStyle = '#f0e4c5';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-9, 11);
+    ctx.quadraticCurveTo(-11, -2, -6, -12);
+    ctx.quadraticCurveTo(0, -16, 6, -12);
+    ctx.quadraticCurveTo(11, -2, 9, 11);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(52, 55, 67, .42)';
+    for (let row = -7; row <= 6; row += 5) {
+      for (let column = -5; column <= 5; column += 5) {
+        ctx.beginPath();
+        ctx.arc(column + (row % 2 ? 1.5 : 0), row, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.strokeStyle = '#e6d7b4';
+    ctx.beginPath();
+    ctx.moveTo(-10, 9);
+    ctx.lineTo(10, 9);
+    ctx.stroke();
   } else if (item.type === 'smile') {
     ctx.shadowColor = item.color || '#d7b5ef';
     ctx.shadowBlur = 18 + Math.sin(time / 220) * 3;
@@ -834,6 +877,64 @@ function drawHazard(ctx, hazard, time) {
 function drawMover(ctx, mover, art) {
   ctx.save();
   ctx.translate(mover.x + mover.w / 2, mover.y + mover.h / 2);
+  if (mover.type === 'dodo') {
+    ctx.rotate((mover.angle || 0) + Math.PI / 2);
+    ctx.shadowColor = 'rgba(116, 92, 137, .56)';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = '#807b9a';
+    ctx.strokeStyle = '#ded5c3';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(0, 2, 10, 13, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#d9ccb0';
+    ctx.beginPath();
+    ctx.arc(1, -11, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#d49a62';
+    ctx.beginPath();
+    ctx.moveTo(7, -12);
+    ctx.lineTo(15, -9);
+    ctx.lineTo(7, -7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#d7b875';
+    ctx.beginPath();
+    ctx.moveTo(-5, 13);
+    ctx.lineTo(-8, 18);
+    ctx.moveTo(5, 13);
+    ctx.lineTo(8, 18);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+  if (mover.type === 'plate') {
+    ctx.rotate((mover.x + mover.y) * 0.035);
+    ctx.shadowColor = 'rgba(189, 210, 228, .58)';
+    ctx.shadowBlur = 11;
+    ctx.fillStyle = '#e7e1d2';
+    ctx.strokeStyle = '#7891ad';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, Math.min(mover.w, mover.h) * 0.46, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = '#a1789c';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, Math.min(mover.w, mover.h) * 0.29, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let index = 0; index < 6; index += 1) {
+      ctx.rotate(Math.PI / 3);
+      ctx.fillStyle = '#b690ad';
+      ctx.beginPath();
+      ctx.arc(0, -9, 1.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    return;
+  }
   if (mover.type === 'watch' && art.watch?.complete) {
     const size = Math.max(38, mover.w * 1.8);
     ctx.rotate((mover.angle || 0) + Math.PI / 2);
@@ -867,6 +968,41 @@ function drawMover(ctx, mover, art) {
 }
 
 function drawDecoration(ctx, decoration, art, time) {
+  if (decoration.type === 'raceTrack') {
+    ctx.save();
+    ctx.globalAlpha = decoration.alpha ?? 0.4;
+    ctx.strokeStyle = '#d8d0b6';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 9]);
+    ctx.beginPath();
+    ctx.ellipse(
+      decoration.x,
+      decoration.y,
+      decoration.w / 2,
+      decoration.h / 2,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    return;
+  }
+  if (decoration.type === 'pepper') {
+    ctx.save();
+    ctx.globalAlpha = decoration.alpha ?? 0.5;
+    ctx.fillStyle = '#e1c378';
+    for (let index = 0; index < 34; index += 1) {
+      const x = decoration.x - decoration.w / 2 + ((index * 53 + time * 0.015) % decoration.w);
+      const y = decoration.y - decoration.h / 2 + ((index * 31) % decoration.h);
+      ctx.beginPath();
+      ctx.arc(x, y, 0.8 + (index % 3) * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    return;
+  }
   const image = decoration.type === 'mushroom' ? art.mushroom : art.watch;
   if (!image?.complete) return;
   ctx.save();

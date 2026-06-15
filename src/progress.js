@@ -28,7 +28,9 @@ function sanitizeProgress(value) {
     if (!level) return [];
     const choiceId = choices[id];
     const chosen = level.choices?.find((choice) => choice.id === choiceId);
-    return chosen ? [chosen.next] : level.next || [];
+    return chosen
+      ? [chosen.next, ...(level.legacyNext || [])]
+      : [...(level.next || []), ...(level.legacyNext || [])];
   });
   const unlocked = [
     ...new Set([
