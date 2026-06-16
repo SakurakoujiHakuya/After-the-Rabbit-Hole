@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getCollectionMessage, getDeathMessage } from '../src/gameFeedback.js';
 import {
+  getDynamicHint,
   getStagedObjectives,
   getStealthAlertDuration,
 } from '../src/objectives.js';
@@ -60,5 +61,68 @@ test('tightens cheshire alert timing as each escort advances', () => {
       new Set(['moon-lantern', 'sun-lantern', 'exit-lantern']),
     ),
     1300,
+  );
+});
+
+test('gives state-aware hints for the identity relay puzzle', () => {
+  const level = levelById['caterpillar-crossroad'];
+  assert.match(
+    getDynamicHint(level, { collectedIds: [], activatedIds: [] }),
+    /倒影.*过去/,
+  );
+  assert.match(
+    getDynamicHint(level, {
+      collectedIds: [],
+      activatedIds: [],
+      identityRemaining: 2.8,
+    }),
+    /倒计时.*现在/,
+  );
+  assert.match(
+    getDynamicHint(level, {
+      collectedIds: [],
+      activatedIds: ['who-left', 'who-right'],
+    }),
+    /终点门/,
+  );
+});
+
+test('guides the cheshire stealth route one step at a time', () => {
+  const level = levelById['cheshire-wood'];
+  assert.match(
+    getDynamicHint(level, { collectedIds: [], activatedIds: [] }),
+    /月亮灯/,
+  );
+  assert.match(
+    getDynamicHint(level, {
+      collectedIds: [],
+      activatedIds: ['moon-lantern'],
+    }),
+    /月光微笑/,
+  );
+  assert.match(
+    getDynamicHint(level, {
+      collectedIds: ['moon-smile', 'sun-smile'],
+      activatedIds: ['moon-lantern', 'sun-lantern', 'exit-lantern'],
+    }),
+    /最后一团猫雾/,
+  );
+});
+
+test('explains missing prerequisite items before locked switches', () => {
+  const level = levelById['cheshire-wood'];
+  assert.match(
+    getDynamicHint(level, {
+      collectedIds: [],
+      activatedIds: ['moon-lantern'],
+    }),
+    /月光微笑/,
+  );
+  assert.match(
+    getDynamicHint(level, {
+      collectedIds: ['moon-smile'],
+      activatedIds: ['moon-lantern'],
+    }),
+    /太阳灯/,
   );
 });

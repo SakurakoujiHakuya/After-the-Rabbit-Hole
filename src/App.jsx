@@ -19,7 +19,7 @@ import {
   updateMotionControl,
 } from './motionControls';
 import { getCollectionMessage, getDeathMessage } from './gameFeedback';
-import { getStagedObjectives } from './objectives';
+import { getDynamicHint, getStagedObjectives } from './objectives';
 
 const debugLevelId = import.meta.env.DEV
   ? new URLSearchParams(window.location.search).get('level')
@@ -498,6 +498,23 @@ export default function App() {
     ),
     [activated, collected, level],
   );
+  const dynamicHint = useMemo(() => getDynamicHint(level, {
+    collectedIds: collected.map((item) => item.id),
+    activatedIds: activated,
+    paintedIds: painted,
+    rotations,
+    phases,
+    fragmentCount: collected.filter((item) => item.type === 'fragment').length,
+    identityRemaining,
+  }), [
+    activated,
+    collected,
+    identityRemaining,
+    level,
+    painted,
+    phases,
+    rotations,
+  ]);
 
   const startMotionCalibration = useCallback((preserveNeutral = true) => {
     motionStateRef.current = beginMotionCalibration(
@@ -1035,7 +1052,7 @@ export default function App() {
         </section>
 
         <footer className="game-footer">
-          <div className="hint-line"><span>✦</span><p>{level.hint}</p><span>✦</span></div>
+          <div className="hint-line"><span>✦</span><p>{dynamicHint || level.hint}</p><span>✦</span></div>
           {(level.goal.requires || level.items?.some((item) => item.type === 'curiosity')) && (
             <div className="objective-strip" aria-label="当前目标">
               {stagedObjectives.length > 0 ? stagedObjectives.map((objective, index) => (
