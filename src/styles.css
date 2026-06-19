@@ -706,6 +706,11 @@ button {
   color: rgba(230, 219, 190, .7);
 }
 
+.objective-strip span.phase-state {
+  border-color: rgba(159, 211, 235, .42);
+  color: rgba(216, 239, 248, .86);
+}
+
 .objective-strip span.identity-timer {
   border-color: rgba(156, 210, 235, .62);
   color: #c8e8f4;
@@ -1000,6 +1005,21 @@ button {
   border-radius: 50%;
   background: rgba(193, 169, 108, .25);
   box-shadow: 0 3px 10px rgba(0, 0, 0, .4);
+}
+
+.motion-fallback-button {
+  position: fixed;
+  z-index: 12;
+  right: 24px;
+  bottom: max(30px, env(safe-area-inset-bottom));
+  padding: 11px 15px;
+  border: 1px solid rgba(221, 203, 152, .42);
+  border-radius: 999px;
+  background: rgba(32, 37, 60, .88);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .36), 0 0 16px rgba(187, 170, 224, .16);
+  color: #eadfbd;
+  font-size: 11px;
+  letter-spacing: .08em;
 }
 
 .toast {

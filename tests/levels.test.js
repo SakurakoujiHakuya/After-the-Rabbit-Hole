@@ -747,6 +747,7 @@ test('defines reachable croquet routes with valid flamingo impulses', () => {
     for (const [index, bumper] of level.bumpers.entries()) {
       const target = hoops.find((entry) => entry.id === bumper.targetHoopId);
       assert.ok(target, `${level.id} ${bumper.id} needs a target hoop`);
+      assert.equal(Number.isInteger(bumper.order), true, `${level.id} ${bumper.id} needs a player-facing order`);
       assert.equal(target.requiresBumper, bumper.id);
       if (index > 0) assert.deepEqual(bumper.requiresSwitches, [hoops[index - 1].id]);
       assert.ok(Number.isFinite(bumper.impulseX));

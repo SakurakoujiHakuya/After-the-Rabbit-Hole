@@ -9,6 +9,7 @@ import {
   collectCuriosity,
   completeLevel,
   enterLevel,
+  getRouteLevelIds,
   loadProgress,
   recordDeath,
 } from './progress';
@@ -19,7 +20,7 @@ import {
   updateMotionControl,
 } from './motionControls';
 import { getCollectionMessage, getDeathMessage } from './gameFeedback';
-import { getDynamicHint, getStagedObjectives } from './objectives';
+import { getDynamicHint, getGuidanceObjectives, getStagedObjectives } from './objectives';
 
 const debugLevelId = import.meta.env.DEV
   ? new URLSearchParams(window.location.search).get('level')
@@ -176,9 +177,13 @@ function HowTo({ onClose }) {
 }
 
 function ChapterScreen({ progress, onSelect, onBack }) {
-  const completedCount = Object.keys(progress.completed).length;
-  const chapterTotal = levels.length;
-  const curiosityCount = Object.values(progress.curiosities).filter((items) => items?.length).length;
+  const routeLevelIds = getRouteLevelIds(progress);
+  const routeLevelSet = new Set(routeLevelIds);
+  const completedCount = Object.keys(progress.completed).filter((id) => routeLevelSet.has(id)).length;
+  const chapterTotal = routeLevelIds.length;
+  const curiosityCount = Object.entries(progress.curiosities)
+    .filter(([id, items]) => routeLevelSet.has(id) && items?.length)
+    .length;
   const storyComplete = Boolean(progress.completed['trial-of-names']);
   return (
     <main
@@ -411,9 +416,15 @@ function LevelInterlude({ level, result, onContinue }) {
 function Ending({ progress, onChapters, onReplay }) {
   const branch = progress.choices['caterpillar-crossroad'];
   const lateBranch = progress.choices['queen-garden'];
-  const curiosityCount = Object.values(progress.curiosities).filter((items) => items?.length).length;
-  const crownCount = Object.values(progress.grades).reduce((total, grade) => total + grade, 0);
-  const foundEveryCameo = curiosityCount === levels.length;
+  const routeLevelIds = getRouteLevelIds(progress);
+  const routeLevelSet = new Set(routeLevelIds);
+  const curiosityCount = Object.entries(progress.curiosities)
+    .filter(([id, items]) => routeLevelSet.has(id) && items?.length)
+    .length;
+  const crownCount = Object.entries(progress.grades)
+    .filter(([id]) => routeLevelSet.has(id))
+    .reduce((total, [, grade]) => total + grade, 0);
+  const foundEveryCameo = curiosityCount === routeLevelIds.length;
   return (
     <main className="screen ending-screen">
       <div className="dawn" />
@@ -432,7 +443,7 @@ function Ending({ progress, onChapters, onReplay }) {
             世界无法替她定义的名字。</>
         )}
       </blockquote>
-      <p className="ending-collection">兔子浮雕 {curiosityCount}/{levels.length} · 皇冠 {crownCount}/{levels.length * 3}</p>
+      <p className="ending-collection">兔子浮雕 {curiosityCount}/{routeLevelIds.length} · 皇冠 {crownCount}/{routeLevelIds.length * 3}</p>
       <div className="ending-actions">
         <button className="primary-button dark-button" onClick={onChapters}>重访其他章节</button>
         <button className="text-button dark-text" onClick={onReplay}>从头再做一次选择</button>
@@ -498,6 +509,22 @@ export default function App() {
     ),
     [activated, collected, level],
   );
+  const guidanceObjectives = useMemo(() => getGuidanceObjectives(level, {
+    collectedIds: collected.map((item) => item.id),
+    activatedIds: activated,
+    paintedIds: painted,
+    rotations,
+    phases,
+    fragmentCount: collected.filter((item) => item.type === 'fragment').length,
+  }), [
+    activated,
+    collected,
+    level,
+    painted,
+    phases,
+    rotations,
+  ]);
+  const routeObjectives = stagedObjectives.length > 0 ? stagedObjectives : guidanceObjectives;
   const dynamicHint = useMemo(() => getDynamicHint(level, {
     collectedIds: collected.map((item) => item.id),
     activatedIds: activated,
@@ -806,6 +833,20 @@ export default function App() {
     if (navigator.vibrate) navigator.vibrate(35);
   };
 
+  const handleBumperMiss = (bumper) => {
+    setToast(`这杆没有得分。回到 ${bumper.order || ''} 号火烈鸟，再沿金色虚线打一杆。`);
+    if (navigator.vibrate) navigator.vibrate([18, 30, 18]);
+  };
+
+  const switchToTouchControl = () => {
+    motionStateRef.current = createMotionControlState();
+    inputRef.current.motion = { x: 0, y: 0 };
+    setMotionStatus('idle');
+    setControlMode('joystick');
+    setPaused(false);
+    setToast('已改用触摸圆盘控制。');
+  };
+
   const handleSwitch = (trigger) => {
     setActivated(trigger.activeIds || []);
     if (trigger.sequenceStatus === 'needs-bumper') {
@@ -1036,6 +1077,7 @@ export default function App() {
             onCollect={handleCollect}
             onPaint={handlePaint}
             onBumper={handleBumper}
+            onBumperMiss={handleBumperMiss}
             onSwitch={handleSwitch}
             onGiftUsed={handleGiftUsed}
             onZoneEnter={handleZoneEnter}
@@ -1055,7 +1097,7 @@ export default function App() {
           <div className="hint-line"><span>✦</span><p>{dynamicHint || level.hint}</p><span>✦</span></div>
           {(level.goal.requires || level.items?.some((item) => item.type === 'curiosity')) && (
             <div className="objective-strip" aria-label="当前目标">
-              {stagedObjectives.length > 0 ? stagedObjectives.map((objective, index) => (
+              {routeObjectives.length > 0 ? routeObjectives.map((objective, index) => (
                 <span
                   key={objective.id}
                   className={[
@@ -1092,30 +1134,38 @@ export default function App() {
                   ◷ 过去 {identityRemaining.toFixed(1)}s
                 </span>
               )}
-              {level.goal.requires?.fragments && (
+              {!routeObjectives.length && level.goal.requires?.fragments && (
                 <span className={fragmentItems.length >= level.goal.requires.fragments ? 'done' : ''}>
                   {fragmentItems.length}/{level.goal.requires.fragments} 名字
                 </span>
               )}
-              {Object.entries(level.goal.requires?.rotations || {}).map(([id, turn]) => (
+              {!routeObjectives.length && Object.entries(level.goal.requires?.rotations || {}).map(([id, turn]) => (
                 <span key={id} className={rotations[id] === turn ? 'done' : ''}>
-                  {rotations[id] === turn ? '✓' : '↻'} 房间
+                  {rotations[id] === turn ? '✓' : '↻'} {level.rotationLabel || '房间'}
                 </span>
               ))}
-              {Object.entries(level.goal.requires?.phases || {}).map(([id, phase]) => {
+              {!routeObjectives.length && Object.entries(level.goal.requires?.phases || {}).map(([id, phase]) => {
                 const currentPhase =
                   phases[id] ??
                   level.phases?.find((entry) => entry.id === id)?.initial ??
                   0;
+                const phaseText = level.phaseLabels?.[id]?.[currentPhase] || level.phaseLabel || '棋局';
+                if (level.phaseRoute) {
+                  return (
+                    <span key={id} className="phase-state">
+                      {level.phaseSymbol || '♟'} {phaseText}
+                    </span>
+                  );
+                }
                 return (
                   <span key={id} className={currentPhase === phase ? 'done' : ''}>
                     {currentPhase === phase ? '✓' : level.phaseSymbol || '♟'} {
-                      level.phaseLabel || '棋局'
+                      phaseText
                     }
                   </span>
                 );
               })}
-              {(level.goal.requires?.painted || []).length > 0 && (
+              {!routeObjectives.length && (level.goal.requires?.painted || []).length > 0 && (
                 <span className={painted.length >= level.goal.requires.painted.length ? 'done' : ''}>
                   {painted.length}/{level.goal.requires.painted.length} 玫瑰
                 </span>
@@ -1147,7 +1197,7 @@ export default function App() {
                 ? motionStatus === 'ready'
                   ? '左右倾斜手机选择落点'
                   : motionStatus === 'timeout'
-                    ? '请暂停后重新校准倾斜'
+                    ? '传感器没稳住，可改用触摸圆盘'
                     : '请握稳手机，正在校准方向'
                 : controlMode === 'joystick'
                   ? '左右拖动圆盘选择落点'
@@ -1156,7 +1206,7 @@ export default function App() {
                 ? motionStatus === 'ready'
                   ? '倾斜手机以移动'
                   : motionStatus === 'timeout'
-                    ? '请暂停后重新校准倾斜'
+                    ? '传感器没稳住，可改用触摸圆盘'
                     : '请握稳手机，正在校准方向'
                 : controlMode === 'joystick'
                   ? '拖动左下角圆盘'
@@ -1166,6 +1216,11 @@ export default function App() {
 
         {controlMode === 'joystick' && (
           <Joystick gravityRef={inputRef} horizontalOnly={level.mode === 'fall'} />
+        )}
+        {controlMode === 'motion' && motionStatus === 'timeout' && (
+          <button className="motion-fallback-button" onClick={switchToTouchControl}>
+            改用触摸圆盘
+          </button>
         )}
         {toast && <div className="toast">{toast}</div>}
         <StoryBeat beat={storyBeat} onClose={() => setStoryBeat(null)} />
@@ -1178,14 +1233,7 @@ export default function App() {
               startMotionCalibration(true);
               setPaused(false);
             }}
-            onUseTouch={() => {
-              motionStateRef.current = createMotionControlState();
-              inputRef.current.motion = { x: 0, y: 0 };
-              setMotionStatus('idle');
-              setControlMode('joystick');
-              setPaused(false);
-              setToast('已改用触摸圆盘控制。');
-            }}
+            onUseTouch={switchToTouchControl}
             onRestart={restart}
             onChapters={() => {
               setPaused(false);

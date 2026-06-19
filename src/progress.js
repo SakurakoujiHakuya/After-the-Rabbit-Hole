@@ -1,4 +1,4 @@
-import { firstLevelId, levelById } from './levels.js';
+import { firstLevelId, levelById, levels } from './levels.js';
 
 const STORAGE_KEY = 'after-the-rabbit-hole:progress:v3';
 const LEGACY_STORAGE_KEY = 'after-the-rabbit-hole:progress:v2';
@@ -166,4 +166,16 @@ export function recordDeath(progress, levelId) {
       [levelId]: (progress.deaths[levelId] || 0) + 1,
     },
   });
+}
+
+export function getRouteLevelIds(progress) {
+  const choices = new Set(Object.values(progress.choices || {}));
+  const completed = new Set(Object.keys(progress.completed || {}));
+  return levels
+    .filter((level) => (
+      !level.branch ||
+      choices.has(level.branch) ||
+      completed.has(level.id)
+    ))
+    .map((level) => level.id);
 }

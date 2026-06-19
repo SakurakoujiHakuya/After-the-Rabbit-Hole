@@ -158,8 +158,13 @@ const levelList = [
       requires: { items: ['rabbit-fan'], switches: ['tiny-latch'] },
     },
     next: ['pool-of-tears'],
+    guidanceRoute: [
+      { target: 'house-potion', hint: '先喝蓝药水变小，才能穿过白兔家的小门。' },
+      { target: 'rabbit-fan', hint: '穿过小门后，去带走白兔遗落的折扇。' },
+      { target: 'tiny-latch', hint: '保持小小的身体，去碰高处下面的低门闩。' },
+    ],
     items: [
-      { id: 'house-potion', type: 'potion', x: 292, y: 548, r: 13 },
+      { id: 'house-potion', type: 'potion', label: '蓝药水', x: 292, y: 548, r: 13 },
       { id: 'rabbit-fan', type: 'fan', label: '白兔折扇', x: 58, y: 244, r: 13 },
       { id: 'house-checkpoint', type: 'checkpoint', x: 180, y: 350, r: 12 },
       { id: 'cameo-house', type: 'curiosity', x: 298, y: 438, r: 11 },
@@ -293,6 +298,13 @@ const levelList = [
     next: ['caterpillar-crossroad'],
     switchSequence: ['caucus-one', 'caucus-two', 'caucus-three', 'caucus-finish'],
     sequenceResetMessage: '赛点顺序乱了。渡渡鸟挥挥翅膀，让比赛重新开始。',
+    guidanceRoute: [
+      { target: 'caucus-one', hint: '先沿水流踩亮一号赛点。' },
+      { target: 'caucus-two', hint: '继续绕圈，去踩二号赛点。' },
+      { target: 'caucus-three', hint: '别逆着水流硬冲，顺势去三号赛点。' },
+      { target: 'caucus-finish', hint: '跑完最后一段，踩亮终点赛点。' },
+      { target: 'caucus-thimble', hint: '一整圈完成了，去领取渡渡鸟的银顶针。' },
+    ],
     items: [
       {
         id: 'caucus-thimble',
@@ -521,6 +533,7 @@ const levelList = [
     name: '时间卡在六点',
     mechanic: '传送与旋转茶桌',
     parTime: 75000,
+    rotationLabel: '茶桌',
     hint: '踩下回转曲柄，让茶桌改成通往门的方向',
     quote: '他们不断换座位，因为时间拒绝再向前走。',
     story: [
@@ -1047,6 +1060,9 @@ const levelList = [
     parTime: 110000,
     phaseLabel: '原层镜盘',
     phaseSymbol: '◐',
+    phaseLabels: {
+      'mirror-depth': ['原层', '左影层', '右影层'],
+    },
     hint: '先找到定向镜片恢复左右；再往返中央镜盘，在左影层与右影层各取一枚倒影碎片',
     quote: '她向前走了两步，却看见自己从另一边靠近。',
     story: [
@@ -1282,6 +1298,7 @@ const levelList = [
     bumpers: [
       {
         id: 'flamingo-1',
+        order: 1,
         targetHoopId: 'croquet-hoop-1',
         x: 108,
         y: 548,
@@ -1293,6 +1310,7 @@ const levelList = [
       },
       {
         id: 'flamingo-2',
+        order: 2,
         targetHoopId: 'croquet-hoop-2',
         requiresSwitches: ['croquet-hoop-1'],
         x: 286,
@@ -1305,6 +1323,7 @@ const levelList = [
       },
       {
         id: 'flamingo-3',
+        order: 3,
         targetHoopId: 'croquet-hoop-3',
         requiresSwitches: ['croquet-hoop-2'],
         x: 72,
@@ -1470,6 +1489,7 @@ const levelList = [
     name: '谁偷走了她的名字',
     mechanic: '全部机制综合',
     parTime: 120000,
+    rotationLabel: '法庭',
     hint: '找回三个词，旋转法庭，再点亮证词印章',
     quote: '当所有人都要求她证明自己，她终于决定亲口说出答案。',
     story: [
@@ -1529,6 +1549,11 @@ const levelList = [
       },
     },
     fragments: ['我', '记得', '自己'],
+    guidanceRoute: [
+      { target: 'fragments', hint: '先找回三个名字词：“我”“记得”“自己”。' },
+      { target: 'rotation', id: 'court-room', turn: 1, hint: '三个词齐了，去转动法庭，让证词印章露出正确角度。' },
+      { target: 'verdict', hint: '现在点亮证词印章，把名字交还给自己。' },
+    ],
     ending: true,
     inheritances: [
       {

@@ -1719,6 +1719,7 @@ function MazeGameCanvas({
   onCollect,
   onPaint,
   onBumper,
+  onBumperMiss,
   onSwitch,
   onGiftUsed,
   onZoneEnter,
@@ -1734,6 +1735,7 @@ function MazeGameCanvas({
     onCollect,
     onPaint,
     onBumper,
+    onBumperMiss,
     onSwitch,
     onGiftUsed,
     onZoneEnter,
@@ -1746,6 +1748,7 @@ function MazeGameCanvas({
     onCollect,
     onPaint,
     onBumper,
+    onBumperMiss,
     onSwitch,
     onGiftUsed,
     onZoneEnter,
@@ -2047,6 +2050,10 @@ function MazeGameCanvas({
         }
 
         if (state.lastBumperId && time > state.bumperLinkUntil) {
+          const missedBumper = (level.bumpers || []).find(
+            (bumper) => bumper.id === state.lastBumperId,
+          );
+          callbacksRef.current.onBumperMiss?.(missedBumper || { id: state.lastBumperId });
           state.lastBumperId = null;
           state.bumperFlightUntil = 0;
         }

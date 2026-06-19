@@ -15,6 +15,7 @@ const {
   collectCuriosity,
   completeLevel,
   enterLevel,
+  getRouteLevelIds,
   initialProgress,
   loadProgress,
   recordDeath,
@@ -64,6 +65,25 @@ test('stores independent choices at multiple story forks', () => {
   assert.equal(late.choices[lateFork.id], 'croquet');
   assert.ok(late.unlocked.includes('mad-tea-party'));
   assert.ok(late.unlocked.includes('queen-croquet'));
+});
+
+test('counts the current story route instead of every branch map', () => {
+  const earlyFork = getLevel('caterpillar-crossroad');
+  const lateFork = getLevel('queen-garden');
+  const early = chooseBranch(initialProgress, earlyFork, earlyFork.choices[1]);
+  const late = chooseBranch(early, lateFork, lateFork.choices[1]);
+  const routeIds = getRouteLevelIds(late);
+  assert.equal(routeIds.length, 13);
+  assert.ok(routeIds.includes('mad-tea-party'));
+  assert.ok(routeIds.includes('queen-croquet'));
+  assert.equal(routeIds.includes('mushroom-forest'), false);
+  assert.equal(routeIds.includes('looking-glass'), false);
+
+  const withBonusBranch = {
+    ...late,
+    completed: { ...late.completed, 'looking-glass': true },
+  };
+  assert.equal(getRouteLevelIds(withBonusBranch).includes('looking-glass'), true);
 });
 
 test('grades attempts using time, mistakes, and hidden curiosity', () => {
