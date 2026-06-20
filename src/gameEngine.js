@@ -172,7 +172,7 @@ export function updateMirrorZoneMembership(
 ) {
   const nextIds = new Set();
   for (const zone of zones || []) {
-    if (zone.type !== 'mirror') continue;
+    if (zone.type !== 'mirror' && zone.effect !== 'time') continue;
     const wasActive = activeIds.has(zone.id);
     if (zone.shape === 'ellipse') {
       if (pointInEllipse(point, zone, wasActive ? margin : -margin)) {
@@ -208,6 +208,28 @@ export function getMirrorZoneEffects(activeZones) {
   return {
     vanish: activeZones.some((zone) => zone.effect === 'vanish'),
     invertX: activeZones.filter((zone) => zone.effect === 'invertX').length % 2 === 1,
+  };
+}
+
+export function isPointInZone(point, zone) {
+  if (zone.shape === 'ellipse') return pointInEllipse(point, zone);
+  return pointInRect(point, zone);
+}
+
+export function getTimeZoneEffects(zones, point) {
+  const activeZones = (zones || []).filter((zone) => (
+    zone.effect === 'time' && isPointInZone(point, zone)
+  ));
+  return {
+    timeScale: activeZones.reduce(
+      (scale, zone) => scale * (zone.timeScale ?? 1),
+      1,
+    ),
+    playerDamping: activeZones.reduce(
+      (scale, zone) => Math.min(scale, zone.playerDamping ?? 1),
+      1,
+    ),
+    activeZones,
   };
 }
 
@@ -874,6 +896,7 @@ export function canScoreLinkedHoop(trigger, lastBumperId, linkUntil, time) {
 }
 
 export function getMoverRect(mover, time) {
+  if (mover.type === 'hunterCard') return { ...mover };
   if (mover.path === 'orbit') {
     const angle = time * mover.speed + (mover.phase || 0);
     return {
@@ -888,6 +911,32 @@ export function getMoverRect(mover, time) {
     ...mover,
     x: mover.x + (mover.axis === 'x' ? offset : 0),
     y: mover.y + (mover.axis === 'y' ? offset : 0),
+  };
+}
+
+export function getActiveDecoyTarget(decoys, time) {
+  const active = [...(decoys || [])]
+    .filter((decoy) => time <= decoy.until)
+    .sort((left, right) => right.until - left.until);
+  return active[0] || null;
+}
+
+export function getHunterTarget(player, hidden, decoys, time) {
+  const decoy = getActiveDecoyTarget(decoys, time);
+  if (decoy) return { x: decoy.x, y: decoy.y, kind: 'decoy' };
+  if (hidden) return null;
+  return { x: player.x, y: player.y, kind: 'player' };
+}
+
+export function updateHunterCardPosition(position, target, dt, options = {}) {
+  if (!target) return { ...position };
+  const maxSpeed = options.maxSpeed ?? options.speed ?? 34;
+  const distance = Math.hypot(target.x - position.x, target.y - position.y);
+  if (!distance) return { ...position };
+  const step = Math.min(distance, (maxSpeed * Math.min(dt, 32)) / 1000);
+  return {
+    x: position.x + ((target.x - position.x) / distance) * step,
+    y: position.y + ((target.y - position.y) / distance) * step,
   };
 }
 

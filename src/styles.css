@@ -810,12 +810,88 @@ button {
   transition: width .4s ease;
 }
 
-.chapter-list {
+.route-ledger {
+  width: min(100%, 480px);
+  margin: 0 auto 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(224, 205, 163, .22);
+  border-radius: 18px 4px 18px 4px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(228, 205, 139, .15), transparent 38%),
+    linear-gradient(135deg, rgba(35, 38, 61, .82), rgba(19, 23, 42, .72));
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, .22),
+    inset 0 0 0 1px rgba(255, 255, 255, .035);
+}
+
+.route-ledger .kicker {
+  margin-bottom: 4px;
+  color: rgba(222, 201, 151, .72);
+  font-size: 8px;
+}
+
+.route-ledger h2 {
+  margin: 0 0 10px;
+  color: #f1e5ca;
+  font-family: "Noto Serif SC", serif;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: .14em;
+}
+
+.route-ledger dl {
   display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.route-ledger dl > div {
+  display: grid;
+  grid-template-columns: 74px 1fr;
   gap: 10px;
+  align-items: start;
+}
+
+.route-ledger dt {
+  color: rgba(200, 190, 226, .75);
+  font-size: 10px;
+  letter-spacing: .18em;
+}
+
+.route-ledger dd {
+  margin: 0;
+  color: rgba(239, 230, 210, .86);
+  font-family: "Noto Serif SC", serif;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.chapter-map {
+  display: grid;
+  gap: 14px;
   width: min(100%, 480px);
   margin: 0 auto;
   padding-bottom: max(30px, env(safe-area-inset-bottom));
+}
+
+.chapter-node {
+  position: relative;
+  display: grid;
+  justify-items: center;
+}
+
+.chapter-node:not(:last-child)::after,
+.merge-node::after {
+  content: "";
+  width: 1px;
+  height: 14px;
+  background: linear-gradient(rgba(217, 204, 173, .5), rgba(161, 151, 199, .22));
+}
+
+.chapter-node::after,
+.merge-node::after {
+  display: block;
+  margin: 0 auto -14px;
 }
 
 .chapter-card {
@@ -835,6 +911,11 @@ button {
   text-align: left;
 }
 
+.chapter-node > .chapter-card,
+.branch-lane > .chapter-card {
+  width: 100%;
+}
+
 .chapter-card.completed {
   border-color: rgba(218, 188, 124, .55);
   background:
@@ -845,6 +926,25 @@ button {
 .chapter-card.locked {
   filter: grayscale(.65);
   opacity: .42;
+}
+
+.chapter-card.branch-card {
+  min-height: 102px;
+  border-radius: 18px 4px 18px 4px;
+  background:
+    linear-gradient(145deg, rgba(91, 71, 132, .45), rgba(31, 38, 62, .72)),
+    rgba(19, 24, 42, .88);
+}
+
+.chapter-card.branch-card.chosen {
+  border-color: rgba(216, 188, 237, .7);
+  box-shadow:
+    0 0 0 1px rgba(229, 214, 244, .14) inset,
+    0 10px 28px rgba(102, 75, 143, .28);
+}
+
+.chapter-card.route-branch {
+  border-color: rgba(179, 205, 236, .42);
 }
 
 .chapter-number {
@@ -876,6 +976,18 @@ button {
   font-style: normal;
 }
 
+.chapter-card mark {
+  width: fit-content;
+  margin-top: 3px;
+  padding: 3px 7px;
+  border: 1px solid rgba(228, 204, 145, .22);
+  border-radius: 999px;
+  background: rgba(36, 42, 67, .55);
+  color: rgba(239, 221, 169, .78);
+  font-size: 8px;
+  letter-spacing: .04em;
+}
+
 .chapter-reward {
   display: grid;
   gap: 4px;
@@ -899,6 +1011,168 @@ button {
 .chapter-reward i.found {
   color: #b9c9ee;
   filter: drop-shadow(0 0 4px rgba(174, 196, 235, .45));
+}
+
+.story-fork {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  padding: 4px 0 0;
+}
+
+.fork-node,
+.merge-node {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  text-align: center;
+}
+
+.fork-node::before,
+.merge-node::before {
+  content: "";
+  width: 1px;
+  height: 14px;
+  background: linear-gradient(rgba(217, 204, 173, .45), rgba(179, 162, 211, .25));
+}
+
+.fork-node {
+  color: rgba(231, 218, 196, .72);
+}
+
+.fork-pin {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(229, 209, 151, .42);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(229, 209, 151, .22), rgba(35, 36, 62, .72));
+  color: #ead691;
+  font-family: Georgia, serif;
+  font-size: 15px;
+  box-shadow: 0 0 18px rgba(207, 184, 124, .16);
+}
+
+.fork-node strong {
+  color: #f0e5cf;
+  font-family: "Noto Serif SC", serif;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: .1em;
+}
+
+.fork-node small,
+.merge-node span {
+  padding: 3px 10px;
+  border: 1px solid rgba(205, 190, 220, .18);
+  border-radius: 999px;
+  background: rgba(17, 22, 39, .58);
+  color: rgba(231, 218, 196, .54);
+  font-size: 8px;
+  letter-spacing: .12em;
+}
+
+.fork-scroll {
+  position: relative;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 0 10px;
+  scrollbar-color: rgba(222, 201, 151, .32) transparent;
+}
+
+.fork-scroll::after {
+  content: "横向查看分支";
+  position: sticky;
+  left: calc(100% - 86px);
+  bottom: -6px;
+  display: block;
+  width: max-content;
+  margin-top: 4px;
+  padding: 2px 7px;
+  border: 1px solid rgba(220, 205, 176, .13);
+  border-radius: 999px;
+  background: rgba(14, 18, 34, .62);
+  color: rgba(226, 214, 190, .34);
+  font-size: 7px;
+  letter-spacing: .12em;
+  pointer-events: none;
+}
+
+.branch-lanes {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--branch-count), minmax(150px, 1fr));
+  gap: 12px;
+  min-width: max(100%, calc(var(--branch-count) * 162px));
+  padding: 18px 2px 0;
+}
+
+.fork-rail {
+  position: absolute;
+  top: 0;
+  left: calc(50% / var(--branch-count));
+  right: calc(50% / var(--branch-count));
+  height: 1px;
+  background:
+    linear-gradient(90deg, transparent, rgba(211, 198, 170, .38), transparent);
+}
+
+.branch-lane {
+  position: relative;
+  display: grid;
+  gap: 5px;
+}
+
+.branch-edge {
+  width: 1px;
+  height: 18px;
+  margin: -18px auto 0;
+  background: linear-gradient(rgba(211, 198, 170, .34), rgba(184, 168, 214, .22));
+}
+
+.branch-label {
+  justify-self: center;
+  color: rgba(229, 216, 188, .55);
+  font-size: 8px;
+  letter-spacing: .1em;
+}
+
+.branch-lane.chosen .branch-label {
+  color: #e5d092;
+}
+
+@media (max-width: 420px) {
+  .chapter-card.branch-card {
+    grid-template-columns: 30px 1fr;
+    gap: 8px;
+    min-height: 126px;
+    padding: 10px;
+  }
+
+  .chapter-card.branch-card .chapter-number {
+    font-size: 14px;
+  }
+
+  .chapter-card.branch-card strong {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .chapter-card.branch-card em,
+  .chapter-card.branch-card mark {
+    font-size: 7px;
+    line-height: 1.45;
+  }
+
+  .chapter-card.branch-card .chapter-reward {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+  }
 }
 
 .chapter-result {

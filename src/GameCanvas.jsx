@@ -13,8 +13,10 @@ import {
   getFallGoalY,
   getFallScrollDistance,
   getEchoReplayPosition,
+  getActiveDecoyTarget,
   getIdentityCaptureRemaining,
   getIdentitySealSlowdown,
+  getHunterTarget,
   getMoverRect,
   getMovingZoneRect,
   getActiveFallPlatforms,
@@ -23,6 +25,7 @@ import {
   getPhaseWalls,
   getRotatorWalls,
   getTargetAssistVector,
+  getTimeZoneEffects,
   isBumperEnabled,
   isItemAvailable,
   isMirrorControlActive,
@@ -38,6 +41,7 @@ import {
   selectFallRespawnPlatform,
   segmentCrossesHoop,
   transformControlInput,
+  updateHunterCardPosition,
   updateMirrorZoneMembership,
   updateIdentityRelay,
   updateBall,
@@ -83,7 +87,63 @@ function drawPaper(ctx, gardenImage) {
 
 function drawZone(ctx, zone, time) {
   ctx.save();
-  if (zone.type === 'mirror') {
+  if (zone.effect === 'time') {
+    const slow = (zone.timeScale ?? 1) < 1;
+    const gradient = ctx.createRadialGradient(
+      zone.x + zone.w / 2,
+      zone.y + zone.h / 2,
+      8,
+      zone.x + zone.w / 2,
+      zone.y + zone.h / 2,
+      Math.max(zone.w, zone.h) * 0.62,
+    );
+    gradient.addColorStop(0, slow ? 'rgba(143, 205, 228, .24)' : 'rgba(224, 117, 112, .22)');
+    gradient.addColorStop(1, slow ? 'rgba(84, 111, 171, .08)' : 'rgba(145, 54, 75, .08)');
+    ctx.fillStyle = gradient;
+    if (zone.shape === 'ellipse') {
+      ctx.beginPath();
+      ctx.ellipse(
+        zone.x + zone.w / 2,
+        zone.y + zone.h / 2,
+        zone.w / 2,
+        zone.h / 2,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    } else {
+      roundedRect(ctx, zone.x, zone.y, zone.w, zone.h, 18);
+      ctx.fill();
+    }
+    ctx.strokeStyle = slow ? 'rgba(180, 226, 240, .46)' : 'rgba(238, 168, 143, .52)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash(slow ? [3, 7] : [8, 4]);
+    ctx.beginPath();
+    ctx.ellipse(
+      zone.x + zone.w / 2,
+      zone.y + zone.h / 2,
+      zone.w / 2 - 4,
+      zone.h / 2 - 4,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const centerX = zone.x + zone.w / 2;
+    const centerY = zone.y + zone.h / 2;
+    const radius = Math.min(zone.w, zone.h) * 0.23;
+    ctx.strokeStyle = slow ? 'rgba(226, 241, 244, .6)' : 'rgba(255, 224, 181, .62)';
+    ctx.lineWidth = 1.2;
+    for (let tick = 0; tick < 12; tick += 1) {
+      const angle = (tick / 12) * Math.PI * 2 + time * (slow ? 0.00025 : 0.0011);
+      ctx.beginPath();
+      ctx.moveTo(centerX + Math.cos(angle) * radius, centerY + Math.sin(angle) * radius);
+      ctx.lineTo(centerX + Math.cos(angle) * (radius + 5), centerY + Math.sin(angle) * (radius + 5));
+      ctx.stroke();
+    }
+  } else if (zone.type === 'mirror') {
     const gradient = ctx.createLinearGradient(
       zone.x,
       zone.y,
@@ -450,6 +510,20 @@ function drawItem(ctx, item, time, art) {
     ctx.stroke();
     ctx.fillStyle = '#f3e8cf';
     for (const x of [-6, 0, 6]) ctx.fillRect(x - 1.4, 7, 2.8, 4);
+  } else if (item.type === 'smileDecoy') {
+    ctx.shadowColor = item.color || '#d7b5ef';
+    ctx.shadowBlur = 16 + Math.sin(time / 260) * 4;
+    ctx.strokeStyle = item.color || '#e6c5f4';
+    ctx.lineWidth = 2.6;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(0, -2, 14, 0.13 * Math.PI, 0.87 * Math.PI);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(238, 226, 247, .82)';
+    ctx.font = '10px Georgia';
+    ctx.textAlign = 'center';
+    ctx.fillText('诱饵', 0, -12);
   } else if (item.type === 'mirrorShard') {
     ctx.shadowColor = item.color || '#b8dded';
     ctx.shadowBlur = 20 + Math.sin(time / 220) * 3;
@@ -880,7 +954,7 @@ function drawHazard(ctx, hazard, time) {
 function drawMover(ctx, mover, art, sightRange = 0) {
   ctx.save();
   ctx.translate(mover.x + mover.w / 2, mover.y + mover.h / 2);
-  if (sightRange && mover.type === 'card') {
+  if (sightRange && (mover.type === 'card' || mover.type === 'hunterCard')) {
     ctx.strokeStyle = 'rgba(225, 188, 202, .16)';
     ctx.fillStyle = 'rgba(151, 67, 92, .035)';
     ctx.lineWidth = 1;
@@ -955,6 +1029,29 @@ function drawMover(ctx, mover, art, sightRange = 0) {
     ctx.shadowColor = 'rgba(224, 183, 91, .65)';
     ctx.shadowBlur = 13;
     ctx.drawImage(art.watch, -size / 2, -size / 2, size, size);
+    ctx.restore();
+    return;
+  }
+  if (mover.type === 'hunterCard') {
+    ctx.shadowColor = 'rgba(144, 35, 64, .72)';
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = '#f4e7c6';
+    ctx.strokeStyle = mover.targetKind === 'decoy' ? '#c9a7ef' : '#9b2744';
+    ctx.lineWidth = 2.4;
+    ctx.rotate(Math.sin((mover.x + mover.y) * 0.03) * 0.08);
+    roundedRect(ctx, -mover.w / 2, -mover.h / 2, mover.w, mover.h, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = mover.targetKind === 'decoy' ? '#76549e' : '#a52c48';
+    ctx.font = 'bold 14px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('♛', 0, 1);
+    ctx.strokeStyle = 'rgba(87, 31, 57, .42)';
+    ctx.beginPath();
+    ctx.moveTo(-mover.w * 0.28, -mover.h * 0.55);
+    ctx.quadraticCurveTo(0, -mover.h * 1.15, mover.w * 0.28, -mover.h * 0.55);
+    ctx.stroke();
     ctx.restore();
     return;
   }
@@ -1218,6 +1315,29 @@ function drawStealthHud(ctx, alert, hidden) {
     ctx.textAlign = 'right';
     ctx.fillText(alert > 0.75 ? '快躲进雾里' : '纸牌正在看你', centerX - 26, centerY + 3);
   }
+  ctx.restore();
+}
+
+function drawActiveDecoy(ctx, decoy, time) {
+  if (!decoy) return;
+  const remaining = Math.max(0, decoy.until - time);
+  ctx.save();
+  ctx.translate(decoy.x, decoy.y);
+  ctx.globalAlpha = Math.min(1, remaining / 600);
+  ctx.shadowColor = '#c9a7ef';
+  ctx.shadowBlur = 18 + Math.sin(time / 180) * 4;
+  ctx.strokeStyle = '#eedcff';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(0, -2, 18, 0.14 * Math.PI, 0.86 * Math.PI);
+  ctx.stroke();
+  ctx.fillStyle = '#f4e8ff';
+  for (const x of [-8, 0, 8]) ctx.fillRect(x - 1.5, 8, 3, 5);
+  ctx.strokeStyle = 'rgba(221, 199, 244, .62)';
+  ctx.setLineDash([3, 5]);
+  ctx.beginPath();
+  ctx.arc(0, 0, 24 + Math.sin(time / 220) * 2, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -1822,8 +1942,16 @@ function MazeGameCanvas({
       lastBumperId: null,
       bumperLinkUntil: 0,
       bumperFlightUntil: 0,
+      moverClock: 0,
       moversFrozenUntil: 0,
       moversFrozenAt: 0,
+      hunterPositions: new Map((level.movers || [])
+        .filter((mover) => mover.type === 'hunterCard')
+        .map((mover) => [mover.id, {
+          x: mover.x + mover.w / 2,
+          y: mover.y + mover.h / 2,
+        }])),
+      activeDecoys: new Map(),
       shields: 0,
       immunityUntil: 0,
       activeMirrorZoneIds: new Set(),
@@ -1852,6 +1980,7 @@ function MazeGameCanvas({
       stateRef.current.identityPastOccupied = false;
       stateRef.current.identityExpiringNotified = false;
       stateRef.current.identityReportedTenths = null;
+      stateRef.current.activeDecoys = new Map();
       callbacksRef.current.onIdentityProgress?.(0);
     }
   }, [controlMode]);
@@ -1886,6 +2015,7 @@ function MazeGameCanvas({
       callbacksRef.current.onIdentityProgress?.(0);
       state.stealthAlert = 0;
       state.activeMirrorZoneIds = new Set();
+      state.activeDecoys = new Map();
       for (const zone of level.zones || []) {
         if (
           zone.activationSwitch &&
@@ -1902,12 +2032,6 @@ function MazeGameCanvas({
       const state = stateRef.current;
       const dt = time - previous;
       previous = time;
-      const moverTime = state && time < state.moversFrozenUntil ? state.moversFrozenAt : time;
-      const movers = state
-        ? (level.movers || [])
-            .filter((mover) => isMoverActive(mover, state.switches))
-            .map((mover) => getMoverRect(mover, moverTime))
-        : [];
       const resolvedZones = state
         ? (level.zones || [])
             .filter((zone) => isZoneActive(zone, state))
@@ -1916,6 +2040,66 @@ function MazeGameCanvas({
                 ? getMovingZoneRect(zone, time - (state.zoneActivatedAt.get(zone.id) || time))
                 : zone
             ))
+        : [];
+      const activeTimeEffects = state
+        ? getTimeZoneEffects(resolvedZones, state.player)
+        : { timeScale: 1, playerDamping: 1, activeZones: [] };
+      if (state && !paused && !state.complete && time >= state.moversFrozenUntil) {
+        state.moverClock += dt * activeTimeEffects.timeScale;
+      }
+      if (state?.activeDecoys) {
+        for (const [id, decoy] of state.activeDecoys) {
+          if (time > decoy.until) state.activeDecoys.delete(id);
+        }
+      }
+      const activeMirrorZonesForMovers = state
+        ? getActiveMirrorZones(resolvedZones, state.activeMirrorZoneIds)
+        : [];
+      const hiddenFromMovers = getMirrorZoneEffects(activeMirrorZonesForMovers).vanish;
+      if (state && !paused && !state.complete) {
+        for (const mover of level.movers || []) {
+          if (mover.type !== 'hunterCard') continue;
+          const current = state.hunterPositions.get(mover.id) || {
+            x: mover.x + mover.w / 2,
+            y: mover.y + mover.h / 2,
+          };
+          const target = getHunterTarget(
+            state.player,
+            hiddenFromMovers,
+            state.activeDecoys.values(),
+            time,
+          );
+          state.hunterPositions.set(
+            mover.id,
+            updateHunterCardPosition(current, target, dt, mover),
+          );
+        }
+      }
+      const moverTime = state && time < state.moversFrozenUntil
+        ? state.moversFrozenAt
+        : state?.moverClock || time;
+      const movers = state
+        ? (level.movers || [])
+            .filter((mover) => isMoverActive(mover, state.switches))
+            .map((mover) => {
+              if (mover.type !== 'hunterCard') return getMoverRect(mover, moverTime);
+              const current = state.hunterPositions.get(mover.id) || {
+                x: mover.x + mover.w / 2,
+                y: mover.y + mover.h / 2,
+              };
+              const target = getHunterTarget(
+                state.player,
+                hiddenFromMovers,
+                state.activeDecoys.values(),
+                time,
+              );
+              return {
+                ...mover,
+                x: current.x - mover.w / 2,
+                y: current.y - mover.h / 2,
+                targetKind: target?.kind || 'lost',
+              };
+            })
         : [];
       const activeGates = state ? getActiveGates(level, state.switches) : [];
       const rotatorWalls = state
@@ -1942,9 +2126,13 @@ function MazeGameCanvas({
           resolvedZones,
           state.activeMirrorZoneIds,
         );
-        const enteredMirrorZones = getActiveMirrorZones(resolvedZones, nextMirrorZoneIds)
-          .filter((zone) => !state.activeMirrorZoneIds.has(zone.id));
-        for (const zone of enteredMirrorZones) {
+        const enteredEffectZones = resolvedZones
+          .filter((zone) => (
+            (zone.type === 'mirror' || zone.effect === 'time') &&
+            nextMirrorZoneIds.has(zone.id) &&
+            !state.activeMirrorZoneIds.has(zone.id)
+          ));
+        for (const zone of enteredEffectZones) {
           const firstEntry = !state.seenMirrorZoneIds.has(zone.id);
           state.seenMirrorZoneIds.add(zone.id);
           callbacksRef.current.onZoneEnter?.({ ...zone, firstEntry });
@@ -2021,14 +2209,14 @@ function MazeGameCanvas({
             ? 0.998
             : onIce
               ? 0.996
-              : 0.9 + 0.082 * identitySlowdown,
+              : (0.9 + 0.082 * identitySlowdown) * activeTimeEffects.playerDamping,
           maxSpeed: (
             bumperFlight
               ? 6.2
               : onIce
                 ? 5.8
                 : useMotionModel ? 4.1 : 4.8
-          ) * identitySlowdown,
+          ) * identitySlowdown * activeTimeEffects.playerDamping,
         });
         if (level.echoReplay) {
           state.positionHistory.push({
@@ -2118,7 +2306,7 @@ function MazeGameCanvas({
           if (item.type === 'cookie') state.player.radius = 17;
           if (item.type === 'checkpoint') state.checkpoint = { x: item.x, y: item.y };
           if (item.type === 'timepiece') {
-            state.moversFrozenAt = time;
+            state.moversFrozenAt = state.moverClock;
             state.moversFrozenUntil = time + (item.duration || 7000);
           }
           if (item.type === 'shield') state.shields += item.charges || 1;
@@ -2178,6 +2366,38 @@ function MazeGameCanvas({
             callbacksRef.current.onSwitch({
               ...trigger,
               stealthStage: true,
+              activeIds: [...state.switches],
+            });
+            continue;
+          }
+          if (trigger.action === 'placeDecoy') {
+            const repeatable = trigger.activationMode === 'repeatable';
+            if (!canTriggerSwitch(
+              trigger,
+              state.switches,
+              repeatable ? null : level.switchSequence,
+              state.sequenceIndex,
+            )) continue;
+            const result = activateSwitch(
+              repeatable ? null : level.switchSequence,
+              state.switches,
+              state.sequenceIndex,
+              trigger.id,
+            );
+            state.switches = result.switches;
+            state.sequenceIndex = result.sequenceIndex;
+            state.activeDecoys.set(trigger.id, {
+              id: trigger.id,
+              x: trigger.x,
+              y: trigger.y,
+              until: time + (trigger.duration || 3000),
+            });
+            state.shakeUntil = time + 80;
+            spawnBurst(state, trigger.x, trigger.y, '#d5b7ef', 14);
+            callbacksRef.current.onSwitch({
+              ...trigger,
+              decoyUntil: time + (trigger.duration || 3000),
+              sequenceStatus: 'decoy-placed',
               activeIds: [...state.switches],
             });
             continue;
@@ -2524,6 +2744,9 @@ function MazeGameCanvas({
               : 0,
           }, active, time, artRef.current);
         });
+        for (const decoy of state.activeDecoys.values()) {
+          drawActiveDecoy(ctx, decoy, time);
+        }
         for (const item of level.items || []) {
           if (!state.collected.has(item.id) && isItemAvailable(item, state)) {
             drawItem(ctx, item, time, artRef.current);

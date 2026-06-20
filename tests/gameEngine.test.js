@@ -15,12 +15,14 @@ import {
   getEchoReplayPosition,
   getIdentityCaptureRemaining,
   getIdentitySealSlowdown,
+  getHunterTarget,
   getMoverRect,
   getMovingZoneRect,
   getActiveFallPlatforms,
   getActiveMirrorZones,
   getMirrorZoneEffects,
   getTargetAssistVector,
+  getTimeZoneEffects,
   getPhaseWalls,
   getRotatorWalls,
   isBumperEnabled,
@@ -39,6 +41,7 @@ import {
   segmentCrossesHoop,
   selectAssistTarget,
   transformControlInput,
+  updateHunterCardPosition,
   updateMirrorZoneMembership,
   updateIdentityRelay,
   updateStealthAlert,
@@ -599,6 +602,68 @@ test('activates staged cards and recovers alert inside cat fog', () => {
     }),
     0,
   );
+});
+
+test('combines time zones into mover timing and player damping effects', () => {
+  const zones = [
+    {
+      effect: 'time',
+      shape: 'ellipse',
+      x: 10,
+      y: 10,
+      w: 100,
+      h: 80,
+      timeScale: 0.5,
+      playerDamping: 0.72,
+    },
+    {
+      effect: 'time',
+      x: 40,
+      y: 30,
+      w: 100,
+      h: 80,
+      timeScale: 1.4,
+    },
+  ];
+  const effects = getTimeZoneEffects(zones, { x: 60, y: 50 });
+  assert.equal(effects.activeZones.length, 2);
+  assert.equal(effects.timeScale, 0.7);
+  assert.equal(effects.playerDamping, 0.72);
+  assert.deepEqual(
+    getTimeZoneEffects(zones, { x: 250, y: 250 }),
+    { timeScale: 1, playerDamping: 1, activeZones: [] },
+  );
+});
+
+test('lets hunter cards lose Alice in fog and chase smile decoys first', () => {
+  const player = { x: 120, y: 80 };
+  const hiddenTarget = getHunterTarget(player, true, [], 1000);
+  assert.equal(hiddenTarget, null);
+
+  const decoyTarget = getHunterTarget(
+    player,
+    true,
+    [{ x: 240, y: 300, until: 2000 }],
+    1000,
+  );
+  assert.deepEqual(decoyTarget, { x: 240, y: 300, kind: 'decoy' });
+
+  const playerTarget = getHunterTarget(
+    player,
+    false,
+    [{ x: 240, y: 300, until: 900 }],
+    1000,
+  );
+  assert.deepEqual(playerTarget, { x: 120, y: 80, kind: 'player' });
+
+  const moved = updateHunterCardPosition(
+    { x: 0, y: 0 },
+    { x: 30, y: 0 },
+    500,
+    { maxSpeed: 20 },
+  );
+  assert.equal(moved.x, 0.64);
+  assert.equal(moved.y, 0);
 });
 
 test('raises stealth alert only for an unobstructed nearby card', () => {

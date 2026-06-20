@@ -7,6 +7,7 @@ const collectionMessages = {
   timepiece: '帽匠借出的怀表停住了巡逻机关。',
   fan: '白兔的折扇吹开了一条过分狭窄的路。',
   smile: '微笑留了下来，猫却仍然不见踪影。',
+  smileDecoy: '你借到了一张会替你笑的笑容。',
   shield: '支线留下的纪念物正保护着你。',
   curiosity: '你找到了一枚藏起来的兔子浮雕。',
   thimble: '渡渡鸟郑重地把你的顶针颁给了你。',
@@ -14,6 +15,7 @@ const collectionMessages = {
 
 const deathMessages = {
   card: '纸牌卫兵把你送回了玫瑰旁。',
+  hunterCard: '红心侍卫追上了你。柴郡猫把影子还给了起点。',
   watch: '怀表追上了你，时间重新开始。',
   dodo: '赛跑队伍撞乱了你的脚步。渡渡鸟让你回到起点。',
   plate: '飞来的盘子把你送回了最近的检查点。',

@@ -15,12 +15,13 @@ const {
   collectCuriosity,
   completeLevel,
   enterLevel,
+  getBranchChoiceForLevel,
   getRouteLevelIds,
   initialProgress,
   loadProgress,
   recordDeath,
 } = await import('../src/progress.js');
-const { getLevel } = await import('../src/levels.js');
+const { getLevel, getPlayableLevel } = await import('../src/levels.js');
 
 test.beforeEach(() => {
   memory.clear();
@@ -67,13 +68,36 @@ test('stores independent choices at multiple story forks', () => {
   assert.ok(late.unlocked.includes('queen-croquet'));
 });
 
+test('maps branch chapter selection back to its fork choice', () => {
+  const teaSelection = getBranchChoiceForLevel('mad-tea-party');
+  assert.equal(teaSelection.forkLevel.id, 'caterpillar-crossroad');
+  assert.equal(teaSelection.choice.id, 'tea');
+
+  const croquetSelection = getBranchChoiceForLevel('queen-croquet');
+  assert.equal(croquetSelection.forkLevel.id, 'queen-garden');
+  assert.equal(croquetSelection.choice.id, 'croquet');
+  assert.equal(getBranchChoiceForLevel('dormouse-teapot'), null);
+
+  const teaProgress = chooseBranch(
+    initialProgress,
+    teaSelection.forkLevel,
+    teaSelection.choice,
+  );
+  const kitchen = getPlayableLevel('duchess-kitchen', teaProgress.choices);
+  assert.ok(kitchen.items.some((item) => item.id === 'kitchen-watch-gift'));
+  assert.equal(kitchen.items.some((item) => item.id === 'kitchen-mushroom-gift'), false);
+});
+
 test('counts the current story route instead of every branch map', () => {
   const earlyFork = getLevel('caterpillar-crossroad');
   const lateFork = getLevel('queen-garden');
   const early = chooseBranch(initialProgress, earlyFork, earlyFork.choices[1]);
   const late = chooseBranch(early, lateFork, lateFork.choices[1]);
   const routeIds = getRouteLevelIds(late);
-  assert.equal(routeIds.length, 13);
+  assert.equal(routeIds.length, 16);
+  assert.ok(routeIds.includes('white-rabbit-watch'));
+  assert.ok(routeIds.includes('dormouse-teapot'));
+  assert.ok(routeIds.includes('cheshire-shadow'));
   assert.ok(routeIds.includes('mad-tea-party'));
   assert.ok(routeIds.includes('queen-croquet'));
   assert.equal(routeIds.includes('mushroom-forest'), false);

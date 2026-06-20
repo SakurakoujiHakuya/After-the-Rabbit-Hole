@@ -9,6 +9,7 @@ import {
   collectCuriosity,
   completeLevel,
   enterLevel,
+  getBranchChoiceForLevel,
   getRouteLevelIds,
   loadProgress,
   recordDeath,
@@ -21,10 +22,16 @@ import {
 } from './motionControls';
 import { getCollectionMessage, getDeathMessage } from './gameFeedback';
 import { getDynamicHint, getGuidanceObjectives, getStagedObjectives } from './objectives';
+import {
+  getActiveCarrySummary,
+  getBranchGiftSummary,
+  getRouteCarrySummary,
+  getRouteChoiceSummary,
+} from './routeSummary';
 
-const debugLevelId = import.meta.env.DEV
-  ? new URLSearchParams(window.location.search).get('level')
-  : null;
+const debugParams = import.meta.env.DEV ? new URLSearchParams(window.location.search) : null;
+const debugLevelId = debugParams?.get('level') || null;
+const debugScreen = debugParams?.get('screen') || null;
 
 function emitEvent(name, detail = {}) {
   window.dispatchEvent(new CustomEvent(`rabbit-hole:${name}`, { detail }));
@@ -62,6 +69,7 @@ function playMirrorZoneCue(effect) {
     echo: [392, 330],
     vanish: [523, 659],
     invertX: [440, 311],
+    time: [659, 392],
   };
   const [startFrequency, endFrequency] = frequencies[effect] || frequencies.echo;
   oscillator.type = effect === 'vanish' ? 'sine' : 'triangle';
@@ -185,6 +193,101 @@ function ChapterScreen({ progress, onSelect, onBack }) {
     .filter(([id, items]) => routeLevelSet.has(id) && items?.length)
     .length;
   const storyComplete = Boolean(progress.completed['trial-of-names']);
+  const selectedChoiceIds = new Set(Object.values(progress.choices));
+  const routeChoiceSummary = getRouteChoiceSummary(progress);
+  const routeCarrySummary = getRouteCarrySummary(progress.choices);
+  const renderChapterNode = (level, extra = {}) => {
+    const branchSelection = getBranchChoiceForLevel(level.id);
+    const unlocked = extra.unlocked ?? (
+      progress.unlocked.includes(level.id) || (storyComplete && Boolean(level.branch))
+    );
+    const completed = Boolean(progress.completed[level.id]);
+    const selectedBranch = !level.branch || selectedChoiceIds.has(level.branch);
+    const inaccessibleBranch = level.branch && !unlocked && Object.keys(progress.choices).length > 0 && !selectedBranch;
+    const grade = progress.grades[level.id] || 0;
+    const foundCuriosity = Boolean(progress.curiosities[level.id]?.length);
+    const activeCarry = getActiveCarrySummary(level, progress.choices);
+    return (
+      <button
+        key={level.id}
+        className={[
+          'chapter-card',
+          completed ? 'completed' : '',
+          unlocked ? '' : 'locked',
+          level.branch ? 'branch-card' : '',
+          extra.chosen ? 'chosen' : '',
+          level.branch && !extra.chosen && selectedChoiceIds.has(level.branch) ? 'route-branch' : '',
+        ].filter(Boolean).join(' ')}
+        disabled={!unlocked}
+        onClick={() => onSelect(level.id, branchSelection)}
+      >
+        <span className="chapter-number">{String(level.order).padStart(2, '0')}</span>
+        <div>
+          <small>{level.chapter}{level.branch ? ` · ${level.branchLabel || `${level.branch}支线`}` : ''}</small>
+          <strong>{level.name}</strong>
+          <em>
+            {unlocked
+              ? `${level.mechanic}${progress.bestTimes[level.id] ? ` · ${formatDuration(progress.bestTimes[level.id])}` : ''}`
+              : inaccessibleBranch ? '另一条梦境支线' : '尚未解锁'}
+          </em>
+          {extra.giftSummary && <mark>这条路会带来：{extra.giftSummary}</mark>}
+          {activeCarry && <mark>当前携带：{activeCarry}</mark>}
+        </div>
+        <span className="chapter-reward">
+          <b>{grade ? '♛'.repeat(grade) : completed ? '✓' : unlocked ? '→' : '×'}</b>
+          <i className={foundCuriosity ? 'found' : ''}>{foundCuriosity ? '◉' : '○'}</i>
+        </span>
+      </button>
+    );
+  };
+
+  const flowNodes = [];
+  for (const level of levels) {
+    if (level.branch) continue;
+    flowNodes.push(
+      <div className="chapter-node" key={level.id}>
+        {renderChapterNode(level)}
+      </div>,
+    );
+    if (level.choices?.length) {
+      flowNodes.push(
+        <section
+          className="story-fork"
+          key={`${level.id}-branches`}
+          aria-label={`${level.name}分支流程图`}
+          style={{ '--branch-count': level.choices.length }}
+        >
+          <div className="fork-node">
+            <span className="fork-pin">?</span>
+            <strong>{level.name}</strong>
+            <small>选择一条梦里的岔路</small>
+          </div>
+          <div className="fork-scroll" role="group" aria-label="可横向查看的分支路线">
+            <div className="branch-lanes">
+              <span className="fork-rail" aria-hidden="true" />
+            {level.choices.map((choice) => {
+              const choiceLevel = getLevel(choice.next);
+              const chosen = progress.choices[level.id] === choice.id;
+              const unlocked = progress.unlocked.includes(choice.next) || storyComplete || chosen;
+              const giftSummary = getBranchGiftSummary(level, choice);
+              return (
+                <div className={`branch-lane ${chosen ? 'chosen' : ''}`} key={choice.id}>
+                  <span className="branch-edge" aria-hidden="true" />
+                  <span className="branch-label">{chosen ? '当前路线' : choice.title}</span>
+                  {renderChapterNode(choiceLevel, { chosen, unlocked, giftSummary })}
+                </div>
+              );
+            })}
+            </div>
+          </div>
+          <div className="merge-node">
+            <span>分支会在下一页重新汇合</span>
+          </div>
+        </section>
+      );
+    }
+  }
+
   return (
     <main
       className="screen chapter-screen"
@@ -199,38 +302,22 @@ function ChapterScreen({ progress, onSelect, onBack }) {
         <span>{completedCount}/{chapterTotal}<small>浮雕 {curiosityCount}/{chapterTotal}</small></span>
       </header>
       <div className="progress-track"><i style={{ width: `${Math.min(100, (completedCount / chapterTotal) * 100)}%` }} /></div>
-      <section className="chapter-list">
-        {levels.map((level) => {
-          const unlocked = progress.unlocked.includes(level.id) || (storyComplete && Boolean(level.branch));
-          const completed = Boolean(progress.completed[level.id]);
-          const chosen = Object.values(progress.choices).includes(level.branch);
-          const inaccessibleBranch = level.branch && !unlocked && Object.keys(progress.choices).length > 0 && !chosen;
-          const grade = progress.grades[level.id] || 0;
-          const foundCuriosity = Boolean(progress.curiosities[level.id]?.length);
-          return (
-            <button
-              key={level.id}
-              className={`chapter-card ${completed ? 'completed' : ''} ${unlocked ? '' : 'locked'}`}
-              disabled={!unlocked}
-              onClick={() => onSelect(level.id)}
-            >
-              <span className="chapter-number">{String(level.order).padStart(2, '0')}</span>
-              <div>
-                <small>{level.chapter}{level.branch ? ` · ${level.branchLabel || `${level.branch}支线`}` : ''}</small>
-                <strong>{level.name}</strong>
-                <em>
-                  {unlocked
-                    ? `${level.mechanic}${progress.bestTimes[level.id] ? ` · ${formatDuration(progress.bestTimes[level.id])}` : ''}`
-                    : inaccessibleBranch ? '另一条梦境支线' : '尚未解锁'}
-                </em>
-              </div>
-              <span className="chapter-reward">
-                <b>{grade ? '♛'.repeat(grade) : completed ? '✓' : unlocked ? '→' : '×'}</b>
-                <i className={foundCuriosity ? 'found' : ''}>{foundCuriosity ? '◉' : '○'}</i>
-              </span>
-            </button>
-          );
-        })}
+      <section className="route-ledger" aria-label="当前梦境路线">
+        <p className="kicker">ROUTE LEDGER</p>
+        <h2>路线手账</h2>
+        <dl>
+          <div>
+            <dt>已经选择</dt>
+            <dd>{routeChoiceSummary || '还没有在岔路口留下脚印'}</dd>
+          </div>
+          <div>
+            <dt>带入后章</dt>
+            <dd>{routeCarrySummary || '尚未从支线带回遗物'}</dd>
+          </div>
+        </dl>
+      </section>
+      <section className="chapter-map" aria-label="剧情流程图">
+        {flowNodes}
       </section>
     </main>
   );
@@ -454,7 +541,7 @@ function Ending({ progress, onChapters, onReplay }) {
 }
 
 export default function App() {
-  const [screen, setScreen] = useState(debugLevelId ? 'game' : 'start');
+  const [screen, setScreen] = useState(debugScreen === 'chapters' ? 'chapters' : debugLevelId ? 'game' : 'start');
   const [showHowTo, setShowHowTo] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [permissionError, setPermissionError] = useState('');
@@ -497,6 +584,7 @@ export default function App() {
   const motionStateRef = useRef(createMotionControlState());
   const keysRef = useRef(new Set());
   const audioRef = useRef(null);
+  const pendingProgressRef = useRef(null);
   const level = useMemo(
     () => getPlayableLevel(levelId, progress.choices),
     [levelId, progress.choices],
@@ -585,15 +673,19 @@ export default function App() {
     }
   };
 
-  const openPermission = async (targetLevelId = progress.currentLevelId) => {
+  const openPermission = async (targetLevelId = progress.currentLevelId, progressOverride = null) => {
     await startMusic();
+    if (progressOverride) setProgress(progressOverride);
+    pendingProgressRef.current = progressOverride;
     setPendingLevelId(targetLevelId);
     setPermissionError('');
     setScreen('permission');
   };
 
   const beginGame = useCallback((mode, targetLevelId = pendingLevelId) => {
-    const nextProgress = enterLevel(progress, targetLevelId);
+    const baseProgress = pendingProgressRef.current || progress;
+    const nextProgress = enterLevel(baseProgress, targetLevelId);
+    pendingProgressRef.current = null;
     setProgress(nextProgress);
     setControlMode(mode);
     setLevelId(targetLevelId);
@@ -863,6 +955,8 @@ export default function App() {
       setToast('这段记忆散去了。让过去的你再经过一次印章。');
     } else if (trigger.sequenceStatus === 'identity-complete') {
       setToast('过去等到了现在。身份之门终于承认了她。');
+    } else if (trigger.sequenceStatus === 'decoy-placed') {
+      setToast('笑容诱饵留在原地，追踪纸牌开始追错方向。');
     } else if (trigger.stealthStage) {
       setToast(
         trigger.id === 'moon-lantern'
@@ -1009,7 +1103,20 @@ export default function App() {
     const fresh = clearProgress();
     setProgress(fresh);
     setLevelId(firstLevelId);
-    openPermission(firstLevelId);
+    openPermission(firstLevelId, fresh);
+  };
+
+  const selectChapter = (targetLevelId, branchSelection = null) => {
+    if (!branchSelection) {
+      openPermission(targetLevelId);
+      return;
+    }
+    const nextProgress = chooseBranch(
+      progress,
+      branchSelection.forkLevel,
+      branchSelection.choice,
+    );
+    openPermission(targetLevelId, nextProgress);
   };
 
   let content;
@@ -1039,7 +1146,7 @@ export default function App() {
     content = (
       <ChapterScreen
         progress={progress}
-        onSelect={(id) => openPermission(id)}
+        onSelect={selectChapter}
         onBack={() => setScreen('start')}
       />
     );

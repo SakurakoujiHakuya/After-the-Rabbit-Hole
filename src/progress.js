@@ -150,6 +150,16 @@ export function chooseBranch(progress, level, choice) {
   });
 }
 
+export function getBranchChoiceForLevel(levelId) {
+  const targetLevel = levelById[levelId];
+  if (!targetLevel?.branch) return null;
+  for (const forkLevel of levels) {
+    const choice = forkLevel.choices?.find((entry) => entry.next === levelId);
+    if (choice) return { forkLevel, choice };
+  }
+  return null;
+}
+
 export function enterLevel(progress, levelId) {
   return saveProgress({
     ...progress,

@@ -368,7 +368,7 @@ test('uses valid references throughout the chapter graph', () => {
   }
 });
 
-test('builds thirteen-chapter playthroughs for every branch combination', () => {
+test('builds sixteen-chapter playthroughs for every branch combination', () => {
   for (const earlyChoice of ['mushroom', 'tea']) {
     for (const lateChoice of ['mirror', 'croquet']) {
       const choices = {
@@ -383,11 +383,14 @@ test('builds thirteen-chapter playthroughs for every branch combination', () => 
         const choice = level.choices?.find((entry) => entry.id === choices[level.id]);
         level = levelById[choice?.next || level.next?.[0]];
       }
-      assert.equal(route.length, 13, `${earlyChoice}/${lateChoice} route has the wrong length`);
+      assert.equal(route.length, 16, `${earlyChoice}/${lateChoice} route has the wrong length`);
       assert.ok(route.includes('white-rabbit-house'));
       assert.ok(route.includes('caucus-race'));
+      assert.ok(route.includes('white-rabbit-watch'));
       assert.ok(route.includes('duchess-kitchen'));
+      assert.ok(route.includes('dormouse-teapot'));
       assert.ok(route.includes('cheshire-wood'));
+      assert.ok(route.includes('cheshire-shadow'));
       assert.ok(route.includes('card-procession'));
       assert.equal(route.at(-1), 'trial-of-names');
     }
@@ -426,7 +429,12 @@ test('adds Alice-themed common chapters by recombining existing mechanics', () =
     race.switches.map((trigger) => trigger.label),
     ['一号赛点', '二号赛点', '三号赛点', '终点赛点'],
   );
-  assert.deepEqual(race.next, ['caterpillar-crossroad']);
+  assert.deepEqual(race.next, ['white-rabbit-watch']);
+
+  const watch = levelById['white-rabbit-watch'];
+  assert.equal(watch.zones.filter((zone) => zone.effect === 'time').length, 2);
+  assert.deepEqual(watch.goal.requires.switches, ['clock-left', 'clock-right']);
+  assert.deepEqual(watch.next, ['caterpillar-crossroad']);
 
   const kitchen = levelById['duchess-kitchen'];
   assert.ok(kitchen.zones.every((zone) => zone.palette === 'pepper'));
@@ -438,11 +446,21 @@ test('adds Alice-themed common chapters by recombining existing mechanics', () =
     '厨房折扇',
   );
   assert.ok(kitchen.movers.every((mover) => mover.type === 'plate'));
-  assert.deepEqual(kitchen.next, ['cheshire-wood']);
+  assert.deepEqual(kitchen.next, ['dormouse-teapot']);
   assert.ok(
     levelById['mushroom-forest'].next.includes(kitchen.id) &&
     levelById['mad-tea-party'].next.includes(kitchen.id),
   );
+
+  const dormouse = levelById['dormouse-teapot'];
+  assert.ok(dormouse.zones.every((zone) => zone.effect === 'time' && zone.playerDamping < 1));
+  assert.deepEqual(dormouse.next, ['cheshire-wood']);
+
+  const shadow = levelById['cheshire-shadow'];
+  assert.ok(shadow.movers.some((mover) => mover.type === 'hunterCard'));
+  assert.ok(shadow.items.some((item) => item.type === 'smileDecoy'));
+  assert.ok(shadow.switches.some((trigger) => trigger.action === 'placeDecoy'));
+  assert.deepEqual(levelById['cheshire-wood'].next, ['cheshire-shadow']);
 });
 
 test('keeps the paper-card suit sequence reachable in its required order', () => {
@@ -521,7 +539,7 @@ test('gives every local mirror zone a playable effect', () => {
       .map((zone) => ({ level, zone }))
   ));
   const ids = new Set();
-  assert.equal(mirrorZones.length, 4);
+  assert.equal(mirrorZones.length, 6);
   for (const { level, zone } of mirrorZones) {
     assert.ok(zone.id, `${level.id} has an unnamed mirror zone`);
     assert.equal(ids.has(zone.id), false, `${zone.id} is reused`);
@@ -544,6 +562,33 @@ test('gives every local mirror zone a playable effect', () => {
     levelById['cheshire-wood'].zones.every((zone) => zone.effect === 'vanish'),
   );
   assert.equal(levelById['trial-of-names'].zones[0].effect, 'invertX');
+});
+
+test('defines playable time zones and hunter cards for the expansion chapters', () => {
+  const timeZones = levels.flatMap((level) => (
+    (level.zones || [])
+      .filter((zone) => zone.effect === 'time')
+      .map((zone) => ({ level, zone }))
+  ));
+  assert.ok(timeZones.length >= 5);
+  for (const { level, zone } of timeZones) {
+    assert.ok(zone.id, `${level.id} has an unnamed time zone`);
+    assert.equal(Number.isFinite(zone.timeScale), true, `${level.id} ${zone.id} needs a timeScale`);
+    assert.notEqual(zone.timeScale, 1, `${level.id} ${zone.id} must change time`);
+    assert.ok(zone.enterMessage, `${level.id} ${zone.id} needs an enter message`);
+    assert.ok(zone.reenterMessage, `${level.id} ${zone.id} needs a re-entry message`);
+  }
+
+  const hunters = levels.flatMap((level) => (
+    (level.movers || [])
+      .filter((mover) => mover.type === 'hunterCard')
+      .map((mover) => ({ level, mover }))
+  ));
+  assert.equal(hunters.length, 1);
+  for (const { level, mover } of hunters) {
+    assert.equal(Number.isFinite(mover.maxSpeed), true, `${level.id} ${mover.id} needs maxSpeed`);
+    assert.ok(mover.maxSpeed > 0 && mover.maxSpeed <= 60);
+  }
 });
 
 test('builds the caterpillar identity puzzle around two source-specific seals', () => {
@@ -921,6 +966,14 @@ test('declares one-time and repeatable switches explicitly', () => {
 
 test('allows only reviewed mover overlaps with interaction targets', () => {
   const moverRect = (mover, angle) => {
+    if (mover.type === 'hunterCard') {
+      return {
+        x: mover.x,
+        y: mover.y,
+        w: mover.w,
+        h: mover.h,
+      };
+    }
     if (mover.path === 'orbit') {
       return {
         x: mover.centerX + Math.cos(angle) * mover.radiusX - mover.w / 2,
