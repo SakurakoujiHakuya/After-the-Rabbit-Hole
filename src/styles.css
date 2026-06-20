@@ -1624,17 +1624,36 @@ button {
 .ending-actions {
   position: relative;
   z-index: 2;
+  display: grid;
+  justify-items: center;
+  gap: 11px;
   margin-top: 30px;
+}
+
+.ending-actions .text-button {
+  margin-top: 0;
 }
 
 .dark-button {
   border-color: #51452e;
-  background: linear-gradient(135deg, #635537, #3d3524);
+  background:
+    radial-gradient(circle at 20% 18%, rgba(255, 244, 198, .28), transparent 28%),
+    linear-gradient(135deg, #716039, #3d3524);
 }
 
 .text-button.dark-text {
   border-color: rgba(60, 51, 33, .35);
   color: #554a34;
+}
+
+.share-status {
+  position: relative;
+  z-index: 2;
+  min-height: 15px;
+  margin: 14px 0 0;
+  color: rgba(75, 64, 39, .67);
+  font-size: 10px;
+  letter-spacing: .08em;
 }
 
 .the-end {

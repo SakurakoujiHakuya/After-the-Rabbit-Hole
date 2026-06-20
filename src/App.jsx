@@ -28,6 +28,7 @@ import {
   getRouteCarrySummary,
   getRouteChoiceSummary,
 } from './routeSummary';
+import { buildEndingSharePayload, formatShareMessage, getEndingShareStats } from './share';
 
 const debugParams = import.meta.env.DEV ? new URLSearchParams(window.location.search) : null;
 const debugLevelId = debugParams?.get('level') || null;
@@ -43,6 +44,24 @@ function formatDuration(milliseconds) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = String(totalSeconds % 60).padStart(2, '0');
   return minutes ? `${minutes}:${seconds}` : `${seconds}秒`;
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.setAttribute('readonly', '');
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-9999px';
+  document.body.appendChild(textArea);
+  textArea.select();
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textArea);
+  if (!copied) throw new Error('copy failed');
 }
 
 function MusicButton({ muted, playing, onToggle }) {
@@ -501,17 +520,40 @@ function LevelInterlude({ level, result, onContinue }) {
 }
 
 function Ending({ progress, onChapters, onReplay }) {
+  const [shareStatus, setShareStatus] = useState('');
   const branch = progress.choices['caterpillar-crossroad'];
   const lateBranch = progress.choices['queen-garden'];
-  const routeLevelIds = getRouteLevelIds(progress);
-  const routeLevelSet = new Set(routeLevelIds);
-  const curiosityCount = Object.entries(progress.curiosities)
-    .filter(([id, items]) => routeLevelSet.has(id) && items?.length)
-    .length;
-  const crownCount = Object.entries(progress.grades)
-    .filter(([id]) => routeLevelSet.has(id))
-    .reduce((total, [, grade]) => total + grade, 0);
-  const foundEveryCameo = curiosityCount === routeLevelIds.length;
+  const {
+    curiosityCount,
+    crownCount,
+    foundEveryCameo,
+    maxCuriosities,
+    maxCrowns,
+  } = getEndingShareStats(progress);
+  const shareUrl = new URL(import.meta.env.BASE_URL || '/', window.location.origin).href;
+
+  async function handleShare() {
+    const payload = buildEndingSharePayload(progress, shareUrl);
+    try {
+      if (navigator.share) {
+        await navigator.share(payload);
+        emitEvent('game_share', { method: 'native' });
+        setShareStatus('晨光已经把邀请函递出去了。');
+        return;
+      }
+
+      await copyText(formatShareMessage(payload));
+      emitEvent('game_share', { method: 'clipboard' });
+      setShareStatus('分享文案已复制，可以贴给朋友了。');
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        setShareStatus('分享被暂时收回，梦境还在这里。');
+        return;
+      }
+      setShareStatus('复制失败了，请稍后再试。');
+    }
+  }
+
   return (
     <main className="screen ending-screen">
       <div className="dawn" />
@@ -530,11 +572,13 @@ function Ending({ progress, onChapters, onReplay }) {
             世界无法替她定义的名字。</>
         )}
       </blockquote>
-      <p className="ending-collection">兔子浮雕 {curiosityCount}/{routeLevelIds.length} · 皇冠 {crownCount}/{routeLevelIds.length * 3}</p>
+      <p className="ending-collection">兔子浮雕 {curiosityCount}/{maxCuriosities} · 皇冠 {crownCount}/{maxCrowns}</p>
       <div className="ending-actions">
-        <button className="primary-button dark-button" onClick={onChapters}>重访其他章节</button>
+        <button className="primary-button dark-button" onClick={handleShare}>分享这场梦</button>
+        <button className="text-button dark-text" onClick={onChapters}>重访其他章节</button>
         <button className="text-button dark-text" onClick={onReplay}>从头再做一次选择</button>
       </div>
+      {shareStatus && <p className="share-status" role="status">{shareStatus}</p>}
       <p className="the-end">FIN · 但梦境还有另一条路</p>
     </main>
   );
