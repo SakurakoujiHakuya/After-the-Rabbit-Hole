@@ -18,6 +18,7 @@ import {
   getIdentitySealSlowdown,
   getHunterTarget,
   getMoverRect,
+  getMotionEnvironment,
   getMovingZoneRect,
   getActiveFallPlatforms,
   getActiveMirrorZones,
@@ -83,6 +84,129 @@ function drawPaper(ctx, gardenImage) {
   vignette.addColorStop(1, 'rgba(4, 7, 14, .38)');
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, WORLD.width, WORLD.height);
+}
+
+function drawThemedBackdrop(ctx, theme, time) {
+  if (!theme) return;
+  ctx.save();
+  if (theme === 'watch') {
+    ctx.strokeStyle = 'rgba(229, 198, 122, .17)';
+    ctx.lineWidth = 1.2;
+    for (let radius = 48; radius < 330; radius += 48) {
+      ctx.beginPath();
+      ctx.arc(180, 320, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(238, 216, 154, .24)';
+    for (let tick = 0; tick < 24; tick += 1) {
+      const angle = (tick / 24) * Math.PI * 2 + time * 0.00008;
+      ctx.beginPath();
+      ctx.moveTo(180 + Math.cos(angle) * 42, 320 + Math.sin(angle) * 42);
+      ctx.lineTo(180 + Math.cos(angle) * 300, 320 + Math.sin(angle) * 300);
+      ctx.stroke();
+    }
+  } else if (theme === 'tea') {
+    ctx.fillStyle = 'rgba(224, 185, 126, .08)';
+    for (let y = -80; y < WORLD.height + 80; y += 44) {
+      ctx.save();
+      ctx.translate(0, y);
+      ctx.rotate(-0.18);
+      ctx.fillRect(-40, 0, WORLD.width + 80, 14);
+      ctx.restore();
+    }
+    ctx.strokeStyle = 'rgba(239, 219, 180, .16)';
+    for (let x = 38; x < WORLD.width; x += 74) {
+      ctx.beginPath();
+      ctx.arc(x, 92 + ((x * 7) % 420), 18, 0.1 * Math.PI, 1.9 * Math.PI);
+      ctx.stroke();
+    }
+  } else if (theme === 'cheshire') {
+    const haze = ctx.createRadialGradient(180, 320, 20, 180, 320, 360);
+    haze.addColorStop(0, 'rgba(150, 102, 190, .15)');
+    haze.addColorStop(0.58, 'rgba(70, 92, 145, .08)');
+    haze.addColorStop(1, 'rgba(20, 14, 35, .18)');
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, 0, WORLD.width, WORLD.height);
+    ctx.strokeStyle = 'rgba(216, 196, 238, .18)';
+    ctx.lineWidth = 1.4;
+    for (let index = 0; index < 9; index += 1) {
+      const x = 32 + ((index * 53 + time * 0.012) % 310);
+      const y = 68 + ((index * 91) % 500);
+      ctx.beginPath();
+      ctx.arc(x, y, 18 + (index % 3) * 7, 0.1 * Math.PI, 0.9 * Math.PI);
+      ctx.stroke();
+    }
+  } else if (theme === 'queen') {
+    ctx.fillStyle = 'rgba(144, 24, 52, .12)';
+    for (let y = 34; y < WORLD.height; y += 72) {
+      for (let x = 28; x < WORLD.width; x += 84) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillRect(-8, -8, 16, 16);
+        ctx.restore();
+      }
+    }
+    ctx.strokeStyle = 'rgba(238, 204, 150, .14)';
+    for (let y = 52; y < WORLD.height; y += 90) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(WORLD.width, y + Math.sin(time / 500 + y) * 8);
+      ctx.stroke();
+    }
+  } else if (theme === 'mirror') {
+    ctx.fillStyle = 'rgba(190, 221, 238, .07)';
+    const tile = 36;
+    for (let y = 0; y < WORLD.height; y += tile) {
+      for (let x = 0; x < WORLD.width; x += tile) {
+        if (((x / tile) + (y / tile)) % 2 === 0) ctx.fillRect(x, y, tile, tile);
+      }
+    }
+    ctx.strokeStyle = 'rgba(225, 236, 248, .18)';
+    for (let y = 36; y < WORLD.height; y += 58) {
+      ctx.beginPath();
+      ctx.moveTo(12, y);
+      ctx.bezierCurveTo(100, y - 14, 246, y + 14, 348, y - 4);
+      ctx.stroke();
+    }
+  } else if (theme === 'croquet') {
+    ctx.strokeStyle = 'rgba(182, 222, 157, .16)';
+    ctx.lineWidth = 1.5;
+    for (let y = 70; y < WORLD.height; y += 86) {
+      ctx.beginPath();
+      ctx.moveTo(20, y);
+      ctx.quadraticCurveTo(180, y + 28, 340, y);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(238, 140, 170, .12)';
+    for (let index = 0; index < 12; index += 1) {
+      ctx.beginPath();
+      ctx.arc(34 + ((index * 71) % 300), 56 + ((index * 47) % 520), 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (theme === 'kitchen') {
+    ctx.fillStyle = 'rgba(217, 177, 91, .08)';
+    for (let index = 0; index < 70; index += 1) {
+      const x = (index * 47 + time * 0.02) % WORLD.width;
+      const y = (index * 83) % WORLD.height;
+      ctx.beginPath();
+      ctx.arc(x, y, 1 + (index % 4) * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (theme === 'trial') {
+    ctx.strokeStyle = 'rgba(235, 226, 204, .12)';
+    for (let x = -WORLD.height; x < WORLD.width; x += 42) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + WORLD.height, WORLD.height);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x + WORLD.height, 0);
+      ctx.lineTo(x, WORLD.height);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
 }
 
 function drawZone(ctx, zone, time) {
@@ -2044,6 +2168,9 @@ function MazeGameCanvas({
       const activeTimeEffects = state
         ? getTimeZoneEffects(resolvedZones, state.player)
         : { timeScale: 1, playerDamping: 1, activeZones: [] };
+      const activeMotionEffects = state
+        ? getMotionEnvironment(level.motion, resolvedZones, state.player)
+        : getMotionEnvironment(level.motion, [], null);
       if (state && !paused && !state.complete && time >= state.moversFrozenUntil) {
         state.moverClock += dt * activeTimeEffects.timeScale;
       }
@@ -2205,18 +2332,35 @@ function MazeGameCanvas({
         updateBall(state.player, gravity, collisionWalls, dt, {
           motionModel: useMotionModel ? 'targetVelocity' : 'force',
           externalForce: useMotionModel ? currentForce : undefined,
+          externalSpeedScale: 0.52 * activeMotionEffects.externalSpeedScaleMultiplier,
+          accel: 0.17 * activeMotionEffects.accelMultiplier,
           friction: bumperFlight
             ? 0.998
             : onIce
               ? 0.996
-              : (0.9 + 0.082 * identitySlowdown) * activeTimeEffects.playerDamping,
+              : Math.min(
+                  0.999,
+                  (0.9 + 0.082 * identitySlowdown) *
+                    activeTimeEffects.playerDamping *
+                    activeMotionEffects.frictionMultiplier,
+                ),
           maxSpeed: (
             bumperFlight
               ? 6.2
               : onIce
                 ? 5.8
                 : useMotionModel ? 4.1 : 4.8
-          ) * identitySlowdown * activeTimeEffects.playerDamping,
+          ) *
+            identitySlowdown *
+            activeTimeEffects.playerDamping *
+            activeMotionEffects.maxSpeedMultiplier,
+          attackResponseMs: 95 * activeMotionEffects.attackResponseMultiplier,
+          releaseResponseMs: 65 * activeMotionEffects.releaseResponseMultiplier,
+          reverseResponseMs: 55 * activeMotionEffects.reverseResponseMultiplier,
+          sleepInput: 0.05 * activeMotionEffects.sleepInputMultiplier,
+          sleepSpeed: 0.14 * activeMotionEffects.sleepSpeedMultiplier,
+          restitution: 0.06 * activeMotionEffects.restitutionMultiplier,
+          contactSuppressionMs: 120 * activeMotionEffects.contactSuppressionMultiplier,
         });
         if (level.echoReplay) {
           state.positionHistory.push({
@@ -2660,6 +2804,7 @@ function MazeGameCanvas({
         ctx.translate((Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4);
       }
       drawPaper(ctx, artRef.current.garden);
+      drawThemedBackdrop(ctx, level.mapTheme, time);
       if (state && isMirrorControlActive(level.mirrorControls, state)) {
         drawMirrorVeil(ctx, time);
       }

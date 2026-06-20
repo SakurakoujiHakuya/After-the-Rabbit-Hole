@@ -233,6 +233,42 @@ export function getTimeZoneEffects(zones, point) {
   };
 }
 
+const motionDefaults = {
+  frictionMultiplier: 1,
+  maxSpeedMultiplier: 1,
+  accelMultiplier: 1,
+  attackResponseMultiplier: 1,
+  releaseResponseMultiplier: 1,
+  reverseResponseMultiplier: 1,
+  sleepInputMultiplier: 1,
+  sleepSpeedMultiplier: 1,
+  externalSpeedScaleMultiplier: 1,
+  restitutionMultiplier: 1,
+  contactSuppressionMultiplier: 1,
+};
+
+function applyMotionEffect(result, motion = {}) {
+  for (const key of Object.keys(motionDefaults)) {
+    if (Number.isFinite(motion[key])) result[key] *= motion[key];
+  }
+  return result;
+}
+
+export function getMotionEnvironment(levelMotion = {}, zones = [], point = null) {
+  const activeZones = (zones || []).filter((zone) => (
+    zone.motion && (!point || isPointInZone(point, zone))
+  ));
+  const result = {
+    ...motionDefaults,
+    weather: levelMotion.weather || null,
+    surface: levelMotion.surface || null,
+    activeZones,
+  };
+  applyMotionEffect(result, levelMotion);
+  for (const zone of activeZones) applyMotionEffect(result, zone.motion);
+  return result;
+}
+
 export function interpolatePositionHistory(history, targetTime) {
   if (!history?.length || targetTime < history[0].time) return null;
   for (let index = 1; index < history.length; index += 1) {

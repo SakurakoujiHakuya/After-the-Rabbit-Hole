@@ -635,7 +635,9 @@ test('builds three ordered cheshire fog escorts with staged card groups', () => 
     zone.effect === 'vanish' &&
     zone.shape === 'ellipse' &&
     zone.pingPong &&
-    zone.waypoints.length >= 3
+    zone.waypoints.length >= 3 &&
+    zone.motion?.releaseResponseMultiplier > 1.8 &&
+    zone.motion?.sleepSpeedMultiplier < 0.5
   )));
   const moon = level.switches.find((trigger) => trigger.id === 'moon-lantern');
   const sun = level.switches.find((trigger) => trigger.id === 'sun-lantern');
@@ -652,6 +654,43 @@ test('builds three ordered cheshire fog escorts with staged card groups', () => 
   assert.equal(level.movers.filter((mover) => (
     mover.requiresSwitches.includes('exit-lantern')
   )).length, 3);
+});
+
+test('uses environment inertia as part of themed chapter design', () => {
+  const sleepFog = levelById['dormouse-teapot'].zones.filter((zone) => zone.effect === 'time');
+  assert.ok(sleepFog.every((zone) => (
+    zone.motion?.releaseResponseMultiplier < 0.7 &&
+    zone.motion?.sleepSpeedMultiplier > 1.4
+  )));
+
+  const watchZones = Object.fromEntries(
+    levelById['white-rabbit-watch'].zones.map((zone) => [zone.id, zone]),
+  );
+  assert.ok(watchZones['slow-watch-fog'].motion.releaseResponseMultiplier < 1);
+  assert.ok(watchZones['hurry-watch-fog'].motion.releaseResponseMultiplier > 1.4);
+
+  assert.ok(levelById['cheshire-shadow'].zones.every((zone) => (
+    zone.effect === 'vanish' &&
+    zone.motion?.releaseResponseMultiplier > 1.8
+  )));
+});
+
+test('assigns distinct visual map themes to story chapters', () => {
+  const themed = [
+    'white-rabbit-watch',
+    'mad-tea-party',
+    'duchess-kitchen',
+    'dormouse-teapot',
+    'cheshire-wood',
+    'queen-garden',
+    'looking-glass',
+    'queen-croquet',
+    'card-procession',
+    'trial-of-names',
+  ].map((id) => levelById[id].mapTheme);
+
+  assert.ok(themed.every(Boolean));
+  assert.ok(new Set(themed).size >= 7);
 });
 
 test('keeps full interaction radii outside static and dynamic walls', () => {

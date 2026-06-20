@@ -17,6 +17,7 @@ import {
   getIdentitySealSlowdown,
   getHunterTarget,
   getMoverRect,
+  getMotionEnvironment,
   getMovingZoneRect,
   getActiveFallPlatforms,
   getActiveMirrorZones,
@@ -633,6 +634,50 @@ test('combines time zones into mover timing and player damping effects', () => {
     getTimeZoneEffects(zones, { x: 250, y: 250 }),
     { timeScale: 1, playerDamping: 1, activeZones: [] },
   );
+});
+
+test('combines level weather and zone motion inertia effects', () => {
+  const zones = [
+    {
+      id: 'fog',
+      shape: 'ellipse',
+      x: 20,
+      y: 20,
+      w: 120,
+      h: 80,
+      motion: {
+        maxSpeedMultiplier: 1.05,
+        releaseResponseMultiplier: 1.8,
+        sleepSpeedMultiplier: 0.4,
+      },
+    },
+    {
+      id: 'outside',
+      x: 240,
+      y: 240,
+      w: 40,
+      h: 40,
+      motion: {
+        releaseResponseMultiplier: 10,
+      },
+    },
+  ];
+  const effects = getMotionEnvironment(
+    {
+      weather: 'mist',
+      releaseResponseMultiplier: 1.1,
+      frictionMultiplier: 1.01,
+    },
+    zones,
+    { x: 80, y: 60 },
+  );
+
+  assert.equal(effects.weather, 'mist');
+  assert.equal(effects.activeZones.map((zone) => zone.id).join(','), 'fog');
+  assert.equal(effects.maxSpeedMultiplier, 1.05);
+  assert.ok(Math.abs(effects.releaseResponseMultiplier - 1.98) < 0.0001);
+  assert.equal(effects.sleepSpeedMultiplier, 0.4);
+  assert.equal(effects.frictionMultiplier, 1.01);
 });
 
 test('lets hunter cards lose Alice in fog and chase smile decoys first', () => {
