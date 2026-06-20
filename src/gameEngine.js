@@ -269,6 +269,16 @@ export function getMotionEnvironment(levelMotion = {}, zones = [], point = null)
   return result;
 }
 
+export function getMotionCue(levelMotion = {}, motionEffects = {}, timeEffects = {}) {
+  const activeMotionZones = motionEffects.activeZones || [];
+  const activeTimeZones = timeEffects.activeZones || [];
+  const zone = activeMotionZones[activeMotionZones.length - 1] ||
+    activeTimeZones[activeTimeZones.length - 1];
+  if (zone?.motionCue) return zone.motionCue;
+  if (levelMotion.motionCue) return levelMotion.motionCue;
+  return '';
+}
+
 export function interpolatePositionHistory(history, targetTime) {
   if (!history?.length || targetTime < history[0].time) return null;
   for (let index = 1; index < history.length; index += 1) {

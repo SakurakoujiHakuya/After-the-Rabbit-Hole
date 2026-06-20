@@ -375,6 +375,7 @@ const levelList = [
     mapTheme: 'watch',
     motion: {
       weather: 'ticking-draft',
+      motionCue: '时间乱流：松手略有余势',
       releaseResponseMultiplier: 1.08,
     },
     hint: '蓝色怀表雾会拖慢纸牌，红色急促刻度会加快机关；借慢速区踩亮两枚钟面印章',
@@ -445,6 +446,7 @@ const levelList = [
         w: 104,
         h: 92,
         timeScale: 0.38,
+        motionCue: '慢表雾：更稳，更容易刹住',
         motion: {
           maxSpeedMultiplier: 0.86,
           releaseResponseMultiplier: 0.72,
@@ -465,6 +467,7 @@ const levelList = [
         w: 104,
         h: 88,
         timeScale: 1.48,
+        motionCue: '急刻度：更快，也更滑',
         motion: {
           maxSpeedMultiplier: 1.08,
           releaseResponseMultiplier: 1.55,
@@ -940,6 +943,7 @@ const levelList = [
         h: 88,
         timeScale: 0.72,
         playerDamping: 0.72,
+        motionCue: '睡雾：速度变轻，容易停稳',
         motion: {
           maxSpeedMultiplier: 0.9,
           releaseResponseMultiplier: 0.58,
@@ -961,6 +965,7 @@ const levelList = [
         h: 88,
         timeScale: 0.72,
         playerDamping: 0.72,
+        motionCue: '睡雾：速度变轻，容易停稳',
         motion: {
           maxSpeedMultiplier: 0.9,
           releaseResponseMultiplier: 0.58,
@@ -982,6 +987,7 @@ const levelList = [
         h: 78,
         timeScale: 0.78,
         playerDamping: 0.74,
+        motionCue: '睡雾：按住惯性',
         motion: {
           maxSpeedMultiplier: 0.92,
           releaseResponseMultiplier: 0.62,
@@ -1018,6 +1024,7 @@ const levelList = [
     mapTheme: 'cheshire',
     motion: {
       weather: 'grinning-mist',
+      motionCue: '猫雾森林：松手会多滑一点',
       releaseResponseMultiplier: 1.12,
       sleepSpeedMultiplier: 0.86,
     },
@@ -1191,6 +1198,7 @@ const levelList = [
         activationSwitch: 'moon-lantern',
         disabledBySwitches: ['sun-lantern'],
         waypoints: [{ x: 300, y: 540 }, { x: 300, y: 450 }, { x: 70, y: 450 }, { x: 70, y: 350 }],
+        motionCue: '猫雾：隐身，但会滑行',
         motion: {
           maxSpeedMultiplier: 1.04,
           releaseResponseMultiplier: 1.95,
@@ -1216,6 +1224,7 @@ const levelList = [
         activationSwitch: 'sun-lantern',
         disabledBySwitches: ['exit-lantern'],
         waypoints: [{ x: 115, y: 350 }, { x: 300, y: 350 }, { x: 300, y: 250 }, { x: 70, y: 250 }, { x: 70, y: 150 }, { x: 300, y: 150 }],
+        motionCue: '日光猫雾：更漂，别冲过头',
         motion: {
           maxSpeedMultiplier: 1.06,
           releaseResponseMultiplier: 2.1,
@@ -1240,6 +1249,7 @@ const levelList = [
         pingPong: true,
         activationSwitch: 'exit-lantern',
         waypoints: [{ x: 245, y: 150 }, { x: 300, y: 150 }, { x: 300, y: 70 }],
+        motionCue: '出口猫雾：最滑，跟紧它',
         motion: {
           maxSpeedMultiplier: 1.03,
           releaseResponseMultiplier: 2.25,
@@ -1273,6 +1283,7 @@ const levelList = [
     mapTheme: 'cheshire',
     motion: {
       weather: 'borrowed-shadow',
+      motionCue: '借来的影子：脚下有余滑',
       releaseResponseMultiplier: 1.1,
       sleepSpeedMultiplier: 0.9,
     },
@@ -1376,6 +1387,7 @@ const levelList = [
         y: 410,
         w: 130,
         h: 90,
+        motionCue: '猫雾：纸牌看不见，但脚下更滑',
         motion: {
           maxSpeedMultiplier: 1.05,
           releaseResponseMultiplier: 1.85,
@@ -1396,6 +1408,7 @@ const levelList = [
         y: 154,
         w: 116,
         h: 88,
+        motionCue: '高处猫雾：隐身，别飘出雾外',
         motion: {
           maxSpeedMultiplier: 1.06,
           releaseResponseMultiplier: 1.95,
@@ -1531,6 +1544,7 @@ const levelList = [
     mapTheme: 'mirror',
     motion: {
       surface: 'glass-floor',
+      motionCue: '镜面地板：反向时更难刹住',
       releaseResponseMultiplier: 1.18,
       reverseResponseMultiplier: 1.08,
     },

@@ -18,6 +18,7 @@ import {
   getHunterTarget,
   getMoverRect,
   getMotionEnvironment,
+  getMotionCue,
   getMovingZoneRect,
   getActiveFallPlatforms,
   getActiveMirrorZones,
@@ -678,6 +679,18 @@ test('combines level weather and zone motion inertia effects', () => {
   assert.ok(Math.abs(effects.releaseResponseMultiplier - 1.98) < 0.0001);
   assert.equal(effects.sleepSpeedMultiplier, 0.4);
   assert.equal(effects.frictionMultiplier, 1.01);
+});
+
+test('prefers active zone motion cues over level weather cues', () => {
+  const levelMotion = { motionCue: '天气提示' };
+  const motionEffects = {
+    activeZones: [
+      { id: 'zone-a', motionCue: '区域提示' },
+    ],
+  };
+  assert.equal(getMotionCue(levelMotion, motionEffects, { activeZones: [] }), '区域提示');
+  assert.equal(getMotionCue(levelMotion, { activeZones: [] }, { activeZones: [] }), '天气提示');
+  assert.equal(getMotionCue({}, { activeZones: [] }, { activeZones: [] }), '');
 });
 
 test('lets hunter cards lose Alice in fog and chase smile decoys first', () => {

@@ -25,6 +25,7 @@ import {
   getMirrorZoneEffects,
   getPhaseWalls,
   getRotatorWalls,
+  getMotionCue,
   getTargetAssistVector,
   getTimeZoneEffects,
   isBumperEnabled,
@@ -206,6 +207,31 @@ function drawThemedBackdrop(ctx, theme, time) {
       ctx.stroke();
     }
   }
+  ctx.restore();
+}
+
+function drawMotionCue(ctx, cue, time) {
+  if (!cue) return;
+  ctx.save();
+  const pulse = 0.72 + Math.sin(time / 420) * 0.08;
+  const x = 18;
+  const y = 92;
+  const w = Math.min(250, Math.max(132, cue.length * 11 + 34));
+  const h = 28;
+  roundedRect(ctx, x, y, w, h, 14);
+  ctx.fillStyle = `rgba(17, 22, 39, ${pulse})`;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(225, 205, 156, .32)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(232, 217, 177, .9)';
+  ctx.font = '10px "Noto Serif SC", serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('环境', x + 12, y + h / 2);
+  ctx.fillStyle = 'rgba(236, 232, 218, .86)';
+  ctx.font = '11px "Noto Serif SC", serif';
+  ctx.fillText(cue, x + 44, y + h / 2);
   ctx.restore();
 }
 
@@ -2171,6 +2197,7 @@ function MazeGameCanvas({
       const activeMotionEffects = state
         ? getMotionEnvironment(level.motion, resolvedZones, state.player)
         : getMotionEnvironment(level.motion, [], null);
+      const motionCue = getMotionCue(level.motion, activeMotionEffects, activeTimeEffects);
       if (state && !paused && !state.complete && time >= state.moversFrozenUntil) {
         state.moverClock += dt * activeTimeEffects.timeScale;
       }
@@ -2918,6 +2945,7 @@ function MazeGameCanvas({
         if (level.stealthConfig) {
           drawStealthHud(ctx, state.stealthAlert, effects.vanish);
         }
+        drawMotionCue(ctx, motionCue, time);
       }
       ctx.restore();
 

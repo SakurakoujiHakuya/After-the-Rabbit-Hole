@@ -675,6 +675,21 @@ test('uses environment inertia as part of themed chapter design', () => {
   )));
 });
 
+test('explains noticeable motion environments with short HUD cues', () => {
+  const configured = levels.flatMap((level) => [
+    level.motion ? { level, source: level.motion, id: `${level.id}:weather` } : null,
+    ...(level.zones || []).map((zone) => (
+      zone.motion ? { level, source: zone, id: `${level.id}:${zone.id}` } : null
+    )),
+  ].filter(Boolean));
+
+  assert.ok(configured.length >= 10);
+  for (const { id, source } of configured) {
+    assert.ok(source.motionCue, `${id} needs a player-facing motion cue`);
+    assert.ok(source.motionCue.length <= 18, `${id} cue is too long for HUD`);
+  }
+});
+
 test('assigns distinct visual map themes to story chapters', () => {
   const themed = [
     'white-rabbit-watch',
