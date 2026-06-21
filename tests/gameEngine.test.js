@@ -267,9 +267,21 @@ test('expires fragile platforms after their configured delay', () => {
 });
 
 test('spends fall health before restarting the run', () => {
-  assert.deepEqual(applyFallDamage(3), { lives: 2, restart: false });
-  assert.deepEqual(applyFallDamage(2), { lives: 1, restart: false });
-  assert.deepEqual(applyFallDamage(1), { lives: 3, restart: true });
+  assert.deepEqual(applyFallDamage(3), {
+    lives: 2,
+    restart: false,
+    resetAttempt: false,
+  });
+  assert.deepEqual(applyFallDamage(2), {
+    lives: 1,
+    restart: false,
+    resetAttempt: false,
+  });
+  assert.deepEqual(applyFallDamage(1), {
+    lives: 3,
+    restart: true,
+    resetAttempt: true,
+  });
 });
 
 test('drives fall distance from elapsed time instead of frame count', () => {

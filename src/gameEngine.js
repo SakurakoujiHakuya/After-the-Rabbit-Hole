@@ -923,9 +923,9 @@ export function generateFallCourse(config = {}, seed = 1) {
 
 export function applyFallDamage(lives, maxLives = 3) {
   if (lives > 1) {
-    return { lives: lives - 1, restart: false };
+    return { lives: lives - 1, restart: false, resetAttempt: false };
   }
-  return { lives: maxLives, restart: true };
+  return { lives: maxLives, restart: true, resetAttempt: true };
 }
 
 export function applyBumperImpulse(ball, bumper) {

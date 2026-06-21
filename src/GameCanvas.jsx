@@ -1804,7 +1804,8 @@ function FallGameCanvas({
       state.lives = result.lives;
       state.shakeUntil = time + 280;
       spawnBurst(state, state.player.x, state.player.y, '#df8198', 18);
-      if (result.restart) {
+      if (result.resetAttempt) {
+        state.collected = new Set();
         resetRun(state, time);
         state.immunityUntil = time + 900;
         callbacksRef.current.onDeath(reason);
