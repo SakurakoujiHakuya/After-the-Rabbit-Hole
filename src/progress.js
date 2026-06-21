@@ -27,8 +27,55 @@ function validRecord(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
-function cloneRecord(value) {
-  return { ...validRecord(value) };
+function knownLevelEntries(value) {
+  return Object.entries(validRecord(value)).filter(([levelId]) => levelById[levelId]);
+}
+
+function sanitizeCompleted(value) {
+  const cleaned = {};
+  for (const [levelId, completed] of knownLevelEntries(value)) {
+    if (completed === true) cleaned[levelId] = true;
+  }
+  return cleaned;
+}
+
+function sanitizeChoices(value) {
+  const cleaned = {};
+  for (const [levelId, choiceId] of knownLevelEntries(value)) {
+    const level = levelById[levelId];
+    if (level.choices?.some((choice) => choice.id === choiceId)) {
+      cleaned[levelId] = choiceId;
+    }
+  }
+  return cleaned;
+}
+
+function sanitizeBestTimes(value) {
+  const cleaned = {};
+  for (const [levelId, time] of knownLevelEntries(value)) {
+    if (Number.isFinite(time) && time >= 0) cleaned[levelId] = time;
+  }
+  return cleaned;
+}
+
+function sanitizeDeaths(value) {
+  const cleaned = {};
+  for (const [levelId, deaths] of knownLevelEntries(value)) {
+    if (Number.isFinite(deaths) && deaths >= 0) {
+      cleaned[levelId] = Math.floor(deaths);
+    }
+  }
+  return cleaned;
+}
+
+function sanitizeGrades(value) {
+  const cleaned = {};
+  for (const [levelId, grade] of knownLevelEntries(value)) {
+    if (Number.isFinite(grade) && grade >= 1 && grade <= 3) {
+      cleaned[levelId] = Math.floor(grade);
+    }
+  }
+  return cleaned;
 }
 
 function getLevelCuriosityIds(level) {
@@ -51,11 +98,11 @@ function sanitizeCuriosities(value) {
 
 function sanitizeProgress(value) {
   if (!value || ![2, 3].includes(value.version)) return createInitialProgress();
-  const completed = cloneRecord(value.completed);
-  const choices = cloneRecord(value.choices);
-  const bestTimes = cloneRecord(value.bestTimes);
-  const deaths = cloneRecord(value.deaths);
-  const grades = cloneRecord(value.grades);
+  const completed = sanitizeCompleted(value.completed);
+  const choices = sanitizeChoices(value.choices);
+  const bestTimes = sanitizeBestTimes(value.bestTimes);
+  const deaths = sanitizeDeaths(value.deaths);
+  const grades = sanitizeGrades(value.grades);
   const curiosities = sanitizeCuriosities(value.curiosities);
   const derivedUnlocks = Object.keys(completed).flatMap((id) => {
     const level = levelById[id];

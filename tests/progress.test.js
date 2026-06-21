@@ -216,6 +216,55 @@ test('recovers unlocks from completed chapters when a save has malformed fields'
   });
 });
 
+test('cleans malformed progress stats and branch choices', () => {
+  memory.set('after-the-rabbit-hole:progress:v3', JSON.stringify({
+    version: 3,
+    currentLevelId: 'not-a-level',
+    unlocked: ['rabbit-fall', 'not-a-level'],
+    completed: {
+      'rabbit-fall': true,
+      'hall-of-doors': 'yes',
+      'not-a-level': true,
+    },
+    choices: {
+      'caterpillar-crossroad': 'tea',
+      'queen-garden': 'not-a-choice',
+      'rabbit-fall': 'tea',
+      'not-a-level': 'tea',
+    },
+    bestTimes: {
+      'rabbit-fall': 30000,
+      'hall-of-doors': -1,
+      'pool-of-tears': 'fast',
+      'not-a-level': 12000,
+    },
+    deaths: {
+      'rabbit-fall': 2.8,
+      'hall-of-doors': -1,
+      'pool-of-tears': '3',
+      'not-a-level': 1,
+    },
+    grades: {
+      'rabbit-fall': 3,
+      'hall-of-doors': 4,
+      'pool-of-tears': 0,
+      'no-number-corridor': 2.9,
+      'not-a-level': 3,
+    },
+  }));
+  const cleaned = loadProgress();
+  assert.equal(cleaned.currentLevelId, 'rabbit-fall');
+  assert.deepEqual(cleaned.completed, { 'rabbit-fall': true });
+  assert.deepEqual(cleaned.choices, { 'caterpillar-crossroad': 'tea' });
+  assert.deepEqual(cleaned.bestTimes, { 'rabbit-fall': 30000 });
+  assert.deepEqual(cleaned.deaths, { 'rabbit-fall': 2 });
+  assert.deepEqual(cleaned.grades, {
+    'rabbit-fall': 3,
+    'no-number-corridor': 2,
+  });
+  assert.deepEqual(cleaned.unlocked, ['rabbit-fall', 'hall-of-doors']);
+});
+
 test('unlocks newly inserted chapters from completed legacy predecessors', () => {
   memory.set('after-the-rabbit-hole:progress:v3', JSON.stringify({
     version: 3,
