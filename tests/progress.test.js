@@ -57,6 +57,24 @@ test('stores branch choice, deaths, and reset state', () => {
   assert.deepEqual(clearProgress(), initialProgress);
 });
 
+test('returns isolated fresh progress objects after load and clear', () => {
+  const loaded = loadProgress();
+  loaded.unlocked.push('hall-of-doors');
+  loaded.completed['rabbit-fall'] = true;
+  loaded.curiosities['rabbit-fall'] = ['cameo-rabbit-fall'];
+
+  const reloaded = loadProgress();
+  assert.deepEqual(reloaded, initialProgress);
+  assert.deepEqual(initialProgress.unlocked, ['rabbit-fall']);
+  assert.deepEqual(initialProgress.completed, {});
+  assert.deepEqual(initialProgress.curiosities, {});
+
+  const cleared = clearProgress();
+  cleared.unlocked.push('hall-of-doors');
+  cleared.deaths['rabbit-fall'] = 1;
+  assert.deepEqual(clearProgress(), initialProgress);
+});
+
 test('stores independent choices at multiple story forks', () => {
   const earlyFork = getLevel('caterpillar-crossroad');
   const lateFork = getLevel('queen-garden');
@@ -136,6 +154,34 @@ test('migrates a version 2 save without losing chapter progress', () => {
   assert.equal(migrated.currentLevelId, 'pool-of-tears');
   assert.equal(migrated.completed['hall-of-doors'], true);
   assert.deepEqual(migrated.grades, {});
+});
+
+test('recovers unlocks from completed chapters when a save has malformed fields', () => {
+  memory.set('after-the-rabbit-hole:progress:v3', JSON.stringify({
+    version: 3,
+    currentLevelId: 'pool-of-tears',
+    unlocked: 'rabbit-fall',
+    completed: {
+      'rabbit-fall': true,
+      'hall-of-doors': true,
+    },
+    choices: null,
+    bestTimes: [],
+    deaths: 'none',
+    grades: null,
+    curiosities: [],
+  }));
+  const recovered = loadProgress();
+  assert.equal(recovered.currentLevelId, 'pool-of-tears');
+  assert.deepEqual(recovered.completed, {
+    'rabbit-fall': true,
+    'hall-of-doors': true,
+  });
+  assert.ok(recovered.unlocked.includes('hall-of-doors'));
+  assert.ok(recovered.unlocked.includes('no-number-corridor'));
+  assert.deepEqual(recovered.bestTimes, {});
+  assert.deepEqual(recovered.deaths, {});
+  assert.deepEqual(recovered.curiosities, {});
 });
 
 test('unlocks newly inserted chapters from completed legacy predecessors', () => {

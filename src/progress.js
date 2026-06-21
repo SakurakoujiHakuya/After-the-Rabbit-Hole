@@ -3,26 +3,42 @@ import { firstLevelId, levelById, levels } from './levels.js';
 const STORAGE_KEY = 'after-the-rabbit-hole:progress:v3';
 const LEGACY_STORAGE_KEY = 'after-the-rabbit-hole:progress:v2';
 
-export const initialProgress = {
-  version: 3,
-  currentLevelId: firstLevelId,
-  unlocked: [firstLevelId],
-  completed: {},
-  choices: {},
-  bestTimes: {},
-  deaths: {},
-  grades: {},
-  curiosities: {},
-};
+function createInitialProgress() {
+  return {
+    version: 3,
+    currentLevelId: firstLevelId,
+    unlocked: [firstLevelId],
+    completed: {},
+    choices: {},
+    bestTimes: {},
+    deaths: {},
+    grades: {},
+    curiosities: {},
+  };
+}
+
+export const initialProgress = createInitialProgress();
+
+function validArray(value) {
+  return Array.isArray(value) ? value : [];
+}
 
 function validRecord(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
+function cloneRecord(value) {
+  return { ...validRecord(value) };
+}
+
 function sanitizeProgress(value) {
-  if (!value || ![2, 3].includes(value.version)) return { ...initialProgress };
-  const completed = validRecord(value.completed);
-  const choices = validRecord(value.choices);
+  if (!value || ![2, 3].includes(value.version)) return createInitialProgress();
+  const completed = cloneRecord(value.completed);
+  const choices = cloneRecord(value.choices);
+  const bestTimes = cloneRecord(value.bestTimes);
+  const deaths = cloneRecord(value.deaths);
+  const grades = cloneRecord(value.grades);
+  const curiosities = cloneRecord(value.curiosities);
   const derivedUnlocks = Object.keys(completed).flatMap((id) => {
     const level = levelById[id];
     if (!level) return [];
@@ -34,22 +50,22 @@ function sanitizeProgress(value) {
   });
   const unlocked = [
     ...new Set([
-      ...(value.unlocked || []).filter((id) => levelById[id]),
+      ...validArray(value.unlocked).filter((id) => levelById[id]),
       ...derivedUnlocks.filter((id) => levelById[id]),
     ]),
   ];
   return {
-    ...initialProgress,
+    ...createInitialProgress(),
     ...value,
     version: 3,
     currentLevelId: levelById[value.currentLevelId] ? value.currentLevelId : firstLevelId,
     unlocked: unlocked.length ? unlocked : [firstLevelId],
     completed,
     choices,
-    bestTimes: validRecord(value.bestTimes),
-    deaths: validRecord(value.deaths),
-    grades: validRecord(value.grades),
-    curiosities: validRecord(value.curiosities),
+    bestTimes,
+    deaths,
+    grades,
+    curiosities,
   };
 }
 
@@ -62,7 +78,7 @@ export function loadProgress() {
   } catch {
     // Fall through to an in-memory fresh save.
   }
-  return { ...initialProgress };
+  return createInitialProgress();
 }
 
 export function saveProgress(progress) {
@@ -82,7 +98,7 @@ export function clearProgress() {
   } catch {
     // The game can still restart in memory when storage is unavailable.
   }
-  return { ...initialProgress };
+  return createInitialProgress();
 }
 
 export function calculateLevelGrade(level, duration, deaths, foundCuriosity) {
