@@ -78,6 +78,22 @@ function sanitizeGrades(value) {
   return cleaned;
 }
 
+export function getValidCuriosityIds(level, ids = []) {
+  const validIds = new Set((level?.items || [])
+    .filter((item) => item.type === 'curiosity')
+    .map((item) => item.id));
+  return [
+    ...new Set(validArray(ids).filter((id) => validIds.has(id))),
+  ];
+}
+
+export function hasFoundCuriosity(progress, level, attemptIds = []) {
+  return getValidCuriosityIds(level, [
+    ...(progress.curiosities?.[level.id] || []),
+    ...attemptIds,
+  ]).length > 0;
+}
+
 function getLevelCuriosityIds(level) {
   return new Set((level?.items || [])
     .filter((item) => item.type === 'curiosity')
@@ -197,13 +213,10 @@ export function collectCuriosity(progress, levelId, curiosityId) {
 export function completeLevel(progress, level, duration, attempt = {}) {
   const previousBest = progress.bestTimes[level.id];
   const nextUnlocked = level.next || [];
-  const validIds = getLevelCuriosityIds(level);
-  const curiosityIds = [
-    ...new Set([
-      ...(progress.curiosities[level.id] || []),
-      ...(attempt.curiosityIds || []),
-    ].filter((id) => validIds.has(id))),
-  ];
+  const curiosityIds = getValidCuriosityIds(level, [
+    ...(progress.curiosities[level.id] || []),
+    ...(attempt.curiosityIds || []),
+  ]);
   const grade = calculateLevelGrade(
     level,
     duration,

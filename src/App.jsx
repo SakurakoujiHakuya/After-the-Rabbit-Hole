@@ -11,6 +11,8 @@ import {
   enterLevel,
   getBranchChoiceForLevel,
   getRouteLevelIds,
+  getValidCuriosityIds,
+  hasFoundCuriosity,
   loadProgress,
   recordDeath,
 } from './progress';
@@ -1092,10 +1094,8 @@ export default function App() {
   const handleComplete = (duration, collectedIds = []) => {
     if (navigator.vibrate) navigator.vibrate([50, 40, 50]);
     const roundedDuration = Math.round(duration);
-    const curiosityIds = collectedIds.filter((id) => id.startsWith('cameo-'));
-    const foundCuriosity =
-      curiosityIds.length > 0 ||
-      Boolean(progress.curiosities[level.id]?.length);
+    const curiosityIds = getValidCuriosityIds(level, collectedIds);
+    const foundCuriosity = hasFoundCuriosity(progress, level, curiosityIds);
     const grade = calculateLevelGrade(level, roundedDuration, runDeaths, foundCuriosity);
     setProgress((current) => completeLevel(current, level, roundedDuration, {
       deaths: runDeaths,

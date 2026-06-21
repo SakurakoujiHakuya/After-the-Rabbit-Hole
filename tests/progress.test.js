@@ -17,6 +17,8 @@ const {
   enterLevel,
   getBranchChoiceForLevel,
   getRouteLevelIds,
+  getValidCuriosityIds,
+  hasFoundCuriosity,
   initialProgress,
   loadProgress,
   recordDeath,
@@ -50,6 +52,16 @@ test('records completion and preserves the best time', () => {
 
 test('stores only declared curiosities and ignores spoofed cameo ids', () => {
   const level = getLevel('rabbit-fall');
+  assert.deepEqual(
+    getValidCuriosityIds(level, ['cameo-fake', 'cameo-rabbit-fall', 'cameo-rabbit-fall']),
+    ['cameo-rabbit-fall'],
+  );
+  assert.equal(hasFoundCuriosity(initialProgress, level, ['cameo-fake']), false);
+  assert.equal(hasFoundCuriosity({
+    ...initialProgress,
+    curiosities: { [level.id]: ['cameo-rabbit-fall'] },
+  }, level), true);
+
   const invalidCollect = collectCuriosity(initialProgress, level.id, 'cameo-fake');
   assert.deepEqual(invalidCollect.curiosities, {});
 
