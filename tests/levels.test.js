@@ -5,6 +5,7 @@ import {
   applyBumperImpulse,
   canTriggerSwitch,
   circleRectCollision,
+  getMoverRect,
   getPhaseWalls,
   getRotatorWalls,
   generateFallCourse,
@@ -1135,6 +1136,26 @@ test('allows only reviewed mover overlaps with interaction targets', () => {
         `${level.id} ${label} has unreviewed mover overlaps`,
       );
     }
+  }
+});
+
+test('keeps the trial checkpoint out of jury card traffic', () => {
+  const level = levelById['trial-of-names'];
+  const checkpoint = level.items.find((item) => item.id === 'trial-checkpoint');
+  const cameo = level.items.find((item) => item.id === 'cameo-trial');
+  const jury = level.movers.find((mover) => mover.id === 'jury-1');
+
+  assert.equal(cameo.type, 'curiosity');
+  assert.equal(checkpoint.type, 'checkpoint');
+  for (let time = 0; time <= 120000; time += 250) {
+    assert.equal(
+      circleRectCollision(
+        { x: checkpoint.x, y: checkpoint.y, radius: checkpoint.r || 12 },
+        getMoverRect(jury, time),
+      ),
+      false,
+      `jury-1 reaches trial checkpoint at ${time}ms`,
+    );
   }
 });
 

@@ -2590,7 +2590,7 @@ const levelList = [
       { id: 'name-1', type: 'fragment', word: '我', x: 54, y: 468, r: 13 },
       { id: 'name-2', type: 'fragment', word: '记得', x: 300, y: 350, r: 13 },
       { id: 'name-3', type: 'fragment', word: '自己', x: 58, y: 206, r: 13 },
-      { id: 'trial-checkpoint', type: 'checkpoint', x: 300, y: 398, r: 12 },
+      { id: 'trial-checkpoint', type: 'checkpoint', x: 115, y: 510, r: 12 },
       { id: 'cameo-trial', type: 'curiosity', x: 300, y: 294, r: 11 },
     ],
     switches: [
@@ -2648,7 +2648,6 @@ const levelList = [
       },
     ],
     allowedMoverOverlaps: [
-      ['jury-1', 'trial-checkpoint'],
       ['court-clock', 'verdict'],
     ],
     walls: [
