@@ -94,12 +94,16 @@ test('counts the current story route instead of every branch map', () => {
   const early = chooseBranch(initialProgress, earlyFork, earlyFork.choices[1]);
   const late = chooseBranch(early, lateFork, lateFork.choices[1]);
   const routeIds = getRouteLevelIds(late);
-  assert.equal(routeIds.length, 16);
+  assert.equal(routeIds.length, 20);
+  assert.ok(routeIds.includes('no-number-corridor'));
+  assert.ok(routeIds.includes('backward-bank'));
   assert.ok(routeIds.includes('white-rabbit-watch'));
   assert.ok(routeIds.includes('dormouse-teapot'));
+  assert.ok(routeIds.includes('eraser-map'));
   assert.ok(routeIds.includes('cheshire-shadow'));
   assert.ok(routeIds.includes('mad-tea-party'));
   assert.ok(routeIds.includes('queen-croquet'));
+  assert.ok(routeIds.includes('leaking-rules'));
   assert.equal(routeIds.includes('mushroom-forest'), false);
   assert.equal(routeIds.includes('looking-glass'), false);
 
@@ -141,8 +145,11 @@ test('unlocks newly inserted chapters from completed legacy predecessors', () =>
     unlocked: ['rabbit-fall', 'hall-of-doors', 'mushroom-forest', 'looking-glass', 'trial-of-names'],
     completed: {
       'hall-of-doors': true,
+      'pool-of-tears': true,
       'mushroom-forest': true,
+      'dormouse-teapot': true,
       'looking-glass': true,
+      'card-procession': true,
     },
     choices: {
       'caterpillar-crossroad': 'mushroom',
@@ -150,8 +157,14 @@ test('unlocks newly inserted chapters from completed legacy predecessors', () =>
     },
   }));
   const migrated = loadProgress();
+  assert.ok(migrated.unlocked.includes('no-number-corridor'));
   assert.ok(migrated.unlocked.includes('white-rabbit-house'));
+  assert.ok(migrated.unlocked.includes('backward-bank'));
+  assert.ok(migrated.unlocked.includes('caucus-race'));
   assert.ok(migrated.unlocked.includes('duchess-kitchen'));
+  assert.ok(migrated.unlocked.includes('eraser-map'));
   assert.ok(migrated.unlocked.includes('cheshire-wood'));
   assert.ok(migrated.unlocked.includes('card-procession'));
+  assert.ok(migrated.unlocked.includes('leaking-rules'));
+  assert.ok(migrated.unlocked.includes('trial-of-names'));
 });

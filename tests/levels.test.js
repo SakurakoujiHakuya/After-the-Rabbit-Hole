@@ -368,7 +368,7 @@ test('uses valid references throughout the chapter graph', () => {
   }
 });
 
-test('builds sixteen-chapter playthroughs for every branch combination', () => {
+test('builds twenty-chapter playthroughs for every branch combination', () => {
   for (const earlyChoice of ['mushroom', 'tea']) {
     for (const lateChoice of ['mirror', 'croquet']) {
       const choices = {
@@ -383,7 +383,16 @@ test('builds sixteen-chapter playthroughs for every branch combination', () => {
         const choice = level.choices?.find((entry) => entry.id === choices[level.id]);
         level = levelById[choice?.next || level.next?.[0]];
       }
-      assert.equal(route.length, 16, `${earlyChoice}/${lateChoice} route has the wrong length`);
+      assert.equal(route.length, 20, `${earlyChoice}/${lateChoice} route has the wrong length`);
+      assert.deepEqual(
+        [
+          route[route.indexOf('hall-of-doors') + 1],
+          route[route.indexOf('pool-of-tears') + 1],
+          route[route.indexOf('dormouse-teapot') + 1],
+          route[route.indexOf('card-procession') + 1],
+        ],
+        ['no-number-corridor', 'backward-bank', 'eraser-map', 'leaking-rules'],
+      );
       assert.ok(route.includes('white-rabbit-house'));
       assert.ok(route.includes('caucus-race'));
       assert.ok(route.includes('white-rabbit-watch'));
@@ -411,6 +420,40 @@ test('keeps the white rabbit size tutorial solvable at each body size', () => {
   assert.equal(canReach(level, {}, fan, {}, potion, 7), true);
   assert.equal(canReach(level, {}, latch, {}, fan, 7), true);
   assert.equal(canReach(level, {}, goal, {}, latch, 7), true);
+});
+
+test('adds the grotesque fairy-tale chapter pack with reusable mechanics', () => {
+  const packIds = ['no-number-corridor', 'backward-bank', 'eraser-map', 'leaking-rules'];
+  const pack = packIds.map((id) => levelById[id]);
+  assert.deepEqual(
+    pack.map((level) => level.name),
+    ['没有编号的门廊', '倒着流的河岸', '会擦掉自己的地图', '规则从牌缝里漏出来'],
+  );
+  assert.deepEqual(
+    pack.map((level) => level.next[0]),
+    ['white-rabbit-house', 'caucus-race', 'cheshire-wood', 'trial-of-names'],
+  );
+
+  for (const level of pack) {
+    assert.ok(level.guidanceRoute?.length, `${level.id} needs guidance`);
+    assert.ok(Object.keys(level.eventStories || {}).length >= 1, `${level.id} needs event stories`);
+    assert.equal(
+      (level.items || []).filter((item) => item.type === 'curiosity').length,
+      1,
+      `${level.id} needs one hidden curiosity`,
+    );
+  }
+
+  assert.equal(levelById['no-number-corridor'].portals.length, 4);
+  assert.equal(levelById['no-number-corridor'].switches[0].action, 'phase');
+  assert.deepEqual(levelById['backward-bank'].switchSequence, ['back-finish', 'back-start']);
+  assert.ok(levelById['backward-bank'].zones.some((zone) => zone.type === 'ice'));
+  assert.equal(levelById['eraser-map'].phases[0].wallsByState.length, 3);
+  assert.ok(levelById['eraser-map'].items.every((item) => (
+    item.type === 'curiosity' || item.requiresPhases
+  )));
+  assert.ok(levelById['leaking-rules'].zones.some((zone) => zone.effect === 'invertX'));
+  assert.ok(levelById['leaking-rules'].zones.filter((zone) => zone.effect === 'time').length >= 2);
 });
 
 test('adds Alice-themed common chapters by recombining existing mechanics', () => {
@@ -454,7 +497,11 @@ test('adds Alice-themed common chapters by recombining existing mechanics', () =
 
   const dormouse = levelById['dormouse-teapot'];
   assert.ok(dormouse.zones.every((zone) => zone.effect === 'time' && zone.playerDamping < 1));
-  assert.deepEqual(dormouse.next, ['cheshire-wood']);
+  assert.deepEqual(dormouse.next, ['eraser-map']);
+
+  const eraserMap = levelById['eraser-map'];
+  assert.equal(eraserMap.phases[0].wallsByState.length, 3);
+  assert.deepEqual(eraserMap.next, ['cheshire-wood']);
 
   const shadow = levelById['cheshire-shadow'];
   assert.ok(shadow.movers.some((mover) => mover.type === 'hunterCard'));
@@ -539,7 +586,7 @@ test('gives every local mirror zone a playable effect', () => {
       .map((zone) => ({ level, zone }))
   ));
   const ids = new Set();
-  assert.equal(mirrorZones.length, 6);
+  assert.equal(mirrorZones.length, 7);
   for (const { level, zone } of mirrorZones) {
     assert.ok(zone.id, `${level.id} has an unnamed mirror zone`);
     assert.equal(ids.has(zone.id), false, `${zone.id} is reused`);
