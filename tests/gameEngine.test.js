@@ -352,7 +352,8 @@ test('generates a safe route before adding optional fall hazards', () => {
         `seed ${seed} generated an invalid vertical gap`,
       );
     }
-    assert.ok(course.platforms.some((platform) => platform.type === 'goal'));
+    const goal = course.platforms.find((platform) => platform.type === 'goal');
+    assert.equal(goal?.landing, 'drink-me-table');
     assert.ok(course.items.every((item) => (
       course.platforms.some((platform) => platform.id === item.platformId)
     )));

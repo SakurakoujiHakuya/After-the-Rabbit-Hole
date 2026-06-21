@@ -1491,6 +1491,85 @@ function drawActiveDecoy(ctx, decoy, time) {
   ctx.restore();
 }
 
+function drawDrinkMeLanding(ctx, platform, time) {
+  const centerX = platform.x + platform.w / 2;
+  const tableY = platform.y;
+  ctx.save();
+
+  const glow = ctx.createRadialGradient(centerX, tableY - 18, 8, centerX, tableY - 18, 96);
+  glow.addColorStop(0, 'rgba(250, 223, 149, .58)');
+  glow.addColorStop(0.45, 'rgba(196, 126, 167, .18)');
+  glow.addColorStop(1, 'rgba(250, 223, 149, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(platform.x - 54, tableY - 112, platform.w + 108, 130);
+
+  ctx.shadowColor = '#f3d786';
+  ctx.shadowBlur = 18 + Math.sin(time / 220) * 3;
+  const tableGradient = ctx.createLinearGradient(platform.x, tableY - 4, platform.x, tableY + 20);
+  tableGradient.addColorStop(0, '#ead08a');
+  tableGradient.addColorStop(0.45, '#9d7041');
+  tableGradient.addColorStop(1, '#4d3026');
+  ctx.fillStyle = tableGradient;
+  ctx.strokeStyle = '#fff0bd';
+  ctx.lineWidth = 2;
+  roundedRect(ctx, platform.x, tableY - 4, platform.w, 22, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#5a3327';
+  ctx.fillRect(platform.x + 24, tableY + 14, 9, 32);
+  ctx.fillRect(platform.x + platform.w - 33, tableY + 14, 9, 32);
+  ctx.fillStyle = 'rgba(255, 238, 188, .38)';
+  ctx.fillRect(platform.x + 15, tableY + 2, platform.w - 30, 3);
+
+  ctx.save();
+  ctx.translate(centerX - 30, tableY - 28 + Math.sin(time / 300) * 1.5);
+  ctx.shadowColor = '#94d9e8';
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = '#9ed8e5';
+  ctx.strokeStyle = '#e9f8fb';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(-7, -16);
+  ctx.lineTo(7, -16);
+  ctx.lineTo(7, -8);
+  ctx.quadraticCurveTo(15, 0, 8, 16);
+  ctx.quadraticCurveTo(0, 21, -8, 16);
+  ctx.quadraticCurveTo(-15, 0, -7, -8);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#3c4d65';
+  ctx.font = 'bold 7px Georgia';
+  ctx.textAlign = 'center';
+  ctx.fillText('DRINK', 0, 2);
+  ctx.fillText('ME', 0, 10);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(centerX + 35, tableY - 21);
+  ctx.strokeStyle = '#f1d27a';
+  ctx.lineWidth = 3;
+  ctx.shadowColor = '#f2da8a';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(-9, 0, 5, 0, Math.PI * 2);
+  ctx.moveTo(-4, 0);
+  ctx.lineTo(18, 0);
+  ctx.lineTo(18, 7);
+  ctx.moveTo(8, 0);
+  ctx.lineTo(8, 5);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = '#fff0bd';
+  ctx.font = '13px Georgia';
+  ctx.textAlign = 'center';
+  ctx.fillText('落到长桌上', centerX, tableY - 54);
+  ctx.restore();
+}
+
 function drawFallPlatform(ctx, platform, breakingAt, time) {
   ctx.save();
   const fragile = platform.type === 'fragile';
@@ -1525,12 +1604,7 @@ function drawFallPlatform(ctx, platform, breakingAt, time) {
     ctx.lineTo(platform.x + platform.w * 0.72, platform.y + platform.h - 2);
     ctx.stroke();
   }
-  if (goal) {
-    ctx.fillStyle = '#fff0bd';
-    ctx.font = '13px Georgia';
-    ctx.textAlign = 'center';
-    ctx.fillText('兔子洞出口', platform.x + platform.w / 2, platform.y - 9);
-  }
+  if (goal && platform.landing === 'drink-me-table') drawDrinkMeLanding(ctx, platform, time);
   if (spikes) drawFallHazard(ctx, platform);
   ctx.restore();
 }

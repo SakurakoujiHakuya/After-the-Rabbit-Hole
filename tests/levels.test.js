@@ -876,6 +876,10 @@ test('defines a complete vertical fall route for the opening chapter', () => {
   assert.ok(course.platforms.some((platform) => platform.type === 'fragile'));
   assert.ok(course.platforms.some((platform) => platform.type === 'spikes'));
   assert.equal(course.platforms.some((platform) => platform.type === 'checkpoint'), false);
+  assert.equal(
+    course.platforms.find((platform) => platform.type === 'goal')?.landing,
+    'drink-me-table',
+  );
   assert.ok(
     course.platforms
       .filter((platform) => platform.route && platform.type !== 'goal')

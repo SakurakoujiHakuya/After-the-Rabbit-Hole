@@ -894,6 +894,8 @@ export function generateFallCourse(config = {}, seed = 1) {
   courseY = targetDistance + 180;
   const goal = addRoutePlatform('goal');
   goal.w = Math.max(goal.w, 190);
+  goal.h = 18;
+  goal.landing = 'drink-me-table';
   goal.x = Math.round(Math.max(sideMargin, Math.min(
     WORLD.width - sideMargin - goal.w,
     routeCenter - goal.w / 2,
