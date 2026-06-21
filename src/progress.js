@@ -31,6 +31,24 @@ function cloneRecord(value) {
   return { ...validRecord(value) };
 }
 
+function getLevelCuriosityIds(level) {
+  return new Set((level?.items || [])
+    .filter((item) => item.type === 'curiosity')
+    .map((item) => item.id));
+}
+
+function sanitizeCuriosities(value) {
+  const cleaned = {};
+  for (const [levelId, ids] of Object.entries(validRecord(value))) {
+    const validIds = getLevelCuriosityIds(levelById[levelId]);
+    const curiosityIds = [
+      ...new Set(validArray(ids).filter((id) => validIds.has(id))),
+    ];
+    if (curiosityIds.length > 0) cleaned[levelId] = curiosityIds;
+  }
+  return cleaned;
+}
+
 function sanitizeProgress(value) {
   if (!value || ![2, 3].includes(value.version)) return createInitialProgress();
   const completed = cloneRecord(value.completed);
@@ -38,7 +56,7 @@ function sanitizeProgress(value) {
   const bestTimes = cloneRecord(value.bestTimes);
   const deaths = cloneRecord(value.deaths);
   const grades = cloneRecord(value.grades);
-  const curiosities = cloneRecord(value.curiosities);
+  const curiosities = sanitizeCuriosities(value.curiosities);
   const derivedUnlocks = Object.keys(completed).flatMap((id) => {
     const level = levelById[id];
     if (!level) return [];
@@ -112,7 +130,11 @@ export function calculateLevelGrade(level, duration, deaths, foundCuriosity) {
 }
 
 export function collectCuriosity(progress, levelId, curiosityId) {
-  const collected = new Set(progress.curiosities[levelId] || []);
+  const validIds = getLevelCuriosityIds(levelById[levelId]);
+  if (!validIds.has(curiosityId)) return saveProgress(progress);
+  const collected = new Set(
+    (progress.curiosities[levelId] || []).filter((id) => validIds.has(id)),
+  );
   collected.add(curiosityId);
   return saveProgress({
     ...progress,
@@ -126,11 +148,12 @@ export function collectCuriosity(progress, levelId, curiosityId) {
 export function completeLevel(progress, level, duration, attempt = {}) {
   const previousBest = progress.bestTimes[level.id];
   const nextUnlocked = level.next || [];
+  const validIds = getLevelCuriosityIds(level);
   const curiosityIds = [
     ...new Set([
       ...(progress.curiosities[level.id] || []),
       ...(attempt.curiosityIds || []),
-    ]),
+    ].filter((id) => validIds.has(id))),
   ];
   const grade = calculateLevelGrade(
     level,

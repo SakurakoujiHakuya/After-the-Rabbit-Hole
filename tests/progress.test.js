@@ -48,6 +48,33 @@ test('records completion and preserves the best time', () => {
   assert.ok(second.unlocked.includes('hall-of-doors'));
 });
 
+test('stores only declared curiosities and ignores spoofed cameo ids', () => {
+  const level = getLevel('rabbit-fall');
+  const invalidCollect = collectCuriosity(initialProgress, level.id, 'cameo-fake');
+  assert.deepEqual(invalidCollect.curiosities, {});
+
+  const fakeOnly = completeLevel(initialProgress, level, level.parTime, {
+    deaths: 0,
+    curiosityIds: ['cameo-fake'],
+  });
+  assert.equal(fakeOnly.grades[level.id], 2);
+  assert.equal(fakeOnly.curiosities[level.id], undefined);
+
+  const mixed = completeLevel({
+    ...initialProgress,
+    curiosities: {
+      [level.id]: ['cameo-fake', 'cameo-rabbit-fall', 'cameo-rabbit-fall'],
+      'missing-level': ['cameo-ghost'],
+    },
+  }, level, level.parTime, {
+    deaths: 0,
+    curiosityIds: ['cameo-fake'],
+  });
+  assert.equal(mixed.grades[level.id], 3);
+  assert.deepEqual(mixed.curiosities[level.id], ['cameo-rabbit-fall']);
+  assert.equal(mixed.curiosities['missing-level'], undefined);
+});
+
 test('stores branch choice, deaths, and reset state', () => {
   const crossroad = getLevel('caterpillar-crossroad');
   const chosen = chooseBranch(initialProgress, crossroad, crossroad.choices[0]);
@@ -169,7 +196,10 @@ test('recovers unlocks from completed chapters when a save has malformed fields'
     bestTimes: [],
     deaths: 'none',
     grades: null,
-    curiosities: [],
+    curiosities: {
+      'rabbit-fall': ['cameo-rabbit-fall', 'cameo-fake', 'cameo-rabbit-fall'],
+      'missing-level': ['cameo-ghost'],
+    },
   }));
   const recovered = loadProgress();
   assert.equal(recovered.currentLevelId, 'pool-of-tears');
@@ -181,7 +211,9 @@ test('recovers unlocks from completed chapters when a save has malformed fields'
   assert.ok(recovered.unlocked.includes('no-number-corridor'));
   assert.deepEqual(recovered.bestTimes, {});
   assert.deepEqual(recovered.deaths, {});
-  assert.deepEqual(recovered.curiosities, {});
+  assert.deepEqual(recovered.curiosities, {
+    'rabbit-fall': ['cameo-rabbit-fall'],
+  });
 });
 
 test('unlocks newly inserted chapters from completed legacy predecessors', () => {
