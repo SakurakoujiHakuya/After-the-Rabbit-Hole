@@ -369,6 +369,83 @@ test('keeps spike platforms off every generated safe route', () => {
   }
 });
 
+test('keeps generated fall courses bounded with one safe themed landing', () => {
+  for (let seed = 1; seed <= 500; seed += 1) {
+    const course = generateFallCourse({ targetDistance: 2400 }, seed);
+    const seenIds = new Set();
+    const goals = course.platforms.filter((platform) => platform.type === 'goal');
+
+    assert.equal(goals.length, 1, `seed ${seed} should create exactly one landing`);
+    assert.equal(goals[0].route, true, `seed ${seed} landing should stay on the route`);
+    assert.equal(goals[0].landing, 'drink-me-table');
+    assert.ok(goals[0].w >= 190, `seed ${seed} landing is too narrow`);
+
+    for (const platform of course.platforms) {
+      assert.ok(platform.id, `seed ${seed} generated a platform without an id`);
+      assert.equal(seenIds.has(platform.id), false, `seed ${seed} reused ${platform.id}`);
+      seenIds.add(platform.id);
+      assert.notEqual(platform.type, 'checkpoint', `seed ${seed} generated a checkpoint`);
+      assert.ok(platform.x >= 18, `seed ${seed} put ${platform.id} beyond the left margin`);
+      assert.ok(
+        platform.x + platform.w <= 342,
+        `seed ${seed} put ${platform.id} beyond the right margin`,
+      );
+      assert.ok(platform.y >= 0, `seed ${seed} put ${platform.id} above the course`);
+      assert.ok(
+        platform.y <= course.targetDistance + 220,
+        `seed ${seed} put ${platform.id} below the planned landing zone`,
+      );
+    }
+  }
+});
+
+test('keeps optional fall branches separated from the mandatory route', () => {
+  for (let seed = 1; seed <= 500; seed += 1) {
+    const course = generateFallCourse({ targetDistance: 2400 }, seed);
+    const byId = new Map(course.platforms.map((platform) => [platform.id, platform]));
+    for (const platform of course.platforms) {
+      const match = platform.id.match(/^fall-bonus-(\d+)$/);
+      if (!match) continue;
+
+      const route = byId.get(`fall-route-${match[1]}`);
+      assert.ok(route, `seed ${seed} created ${platform.id} without its route row`);
+      assert.equal(platform.route, false, `seed ${seed} put ${platform.id} on the route`);
+      assert.ok(
+        platform.type === 'fragile' || platform.type === 'spikes',
+        `seed ${seed} created unsupported branch type ${platform.type}`,
+      );
+
+      const horizontalGap = Math.max(
+        route.x - (platform.x + platform.w),
+        platform.x - (route.x + route.w),
+      );
+      assert.ok(
+        horizontalGap >= 20,
+        `seed ${seed} put ${platform.id} too close to ${route.id}`,
+      );
+    }
+  }
+});
+
+test('places the fall cameo on a reachable risky branch instead of a hazard', () => {
+  for (let seed = 1; seed <= 500; seed += 1) {
+    const course = generateFallCourse({ targetDistance: 2400 }, seed);
+    const byId = new Map(course.platforms.map((platform) => [platform.id, platform]));
+    for (const item of course.items) {
+      const platform = byId.get(item.platformId);
+      assert.ok(platform, `seed ${seed} placed ${item.id} without a platform`);
+      assert.equal(platform.type, 'fragile', `seed ${seed} put ${item.id} on ${platform.type}`);
+      assert.equal(platform.route, false, `seed ${seed} put ${item.id} on the safe route`);
+      assert.ok(item.x >= platform.x, `seed ${seed} put ${item.id} left of its platform`);
+      assert.ok(
+        item.x <= platform.x + platform.w,
+        `seed ${seed} put ${item.id} right of its platform`,
+      );
+      assert.ok(item.y < platform.y, `seed ${seed} put ${item.id} below its platform top`);
+    }
+  }
+});
+
 test('moves hazards along their configured axis', () => {
   const mover = { x: 20, y: 30, w: 10, h: 10, axis: 'x', range: 40, speed: 0.01 };
   const position = getMoverRect(mover, 100);
