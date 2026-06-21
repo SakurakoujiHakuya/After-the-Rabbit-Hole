@@ -115,7 +115,9 @@ function sanitizeProgress(value) {
   });
   const unlocked = [
     ...new Set([
+      firstLevelId,
       ...validArray(value.unlocked).filter((id) => levelById[id]),
+      ...Object.keys(completed),
       ...derivedUnlocks.filter((id) => levelById[id]),
     ]),
   ];
@@ -124,7 +126,7 @@ function sanitizeProgress(value) {
     ...value,
     version: 3,
     currentLevelId: levelById[value.currentLevelId] ? value.currentLevelId : firstLevelId,
-    unlocked: unlocked.length ? unlocked : [firstLevelId],
+    unlocked,
     completed,
     choices,
     bestTimes,

@@ -265,6 +265,24 @@ test('cleans malformed progress stats and branch choices', () => {
   assert.deepEqual(cleaned.unlocked, ['rabbit-fall', 'hall-of-doors']);
 });
 
+test('restores first, completed, and successor chapters to unlocked saves', () => {
+  memory.set('after-the-rabbit-hole:progress:v3', JSON.stringify({
+    version: 3,
+    currentLevelId: 'hall-of-doors',
+    unlocked: ['not-a-level'],
+    completed: {
+      'hall-of-doors': true,
+    },
+  }));
+  const recovered = loadProgress();
+  assert.deepEqual(recovered.unlocked, [
+    'rabbit-fall',
+    'hall-of-doors',
+    'no-number-corridor',
+    'white-rabbit-house',
+  ]);
+});
+
 test('unlocks newly inserted chapters from completed legacy predecessors', () => {
   memory.set('after-the-rabbit-hole:progress:v3', JSON.stringify({
     version: 3,
