@@ -4,6 +4,7 @@ import { getCollectionMessage, getDeathMessage } from '../src/gameFeedback.js';
 import {
   getDynamicHint,
   getGuidanceObjectives,
+  getGuidanceTarget,
   getStagedObjectives,
   getStealthAlertDuration,
 } from '../src/objectives.js';
@@ -173,6 +174,59 @@ test('includes non-goal tutorial steps in guidance objectives', () => {
   });
   assert.deepEqual(route.map((entry) => entry.label), ['蓝药水', '白兔折扇', '低门闩']);
   assert.equal(route[0].current, true);
+});
+
+test('points the dream compass at the current actionable target', () => {
+  assert.equal(
+    getGuidanceTarget(levelById['white-rabbit-house'], {
+      collectedIds: [],
+      activatedIds: [],
+    }).id,
+    'house-potion',
+  );
+  assert.equal(
+    getGuidanceTarget(levelById['caterpillar-crossroad'], {
+      collectedIds: [],
+      activatedIds: [],
+      identityRemaining: 2.4,
+    }).id,
+    'who-right',
+  );
+  assert.equal(
+    getGuidanceTarget(levelById['cheshire-wood'], {
+      collectedIds: ['moon-smile'],
+      activatedIds: ['moon-lantern'],
+    }).id,
+    'sun-lantern',
+  );
+});
+
+test('points phase-map guidance at the layer control before hidden targets', () => {
+  const level = levelById['eraser-map'];
+  assert.match(
+    getDynamicHint(level, {
+      collectedIds: ['erased-sign-1'],
+      activatedIds: ['map-dial'],
+      phases: { 'erased-ink': 1 },
+    }),
+    /切换地图层/,
+  );
+  assert.equal(
+    getGuidanceTarget(level, {
+      collectedIds: ['erased-sign-1'],
+      activatedIds: ['map-dial'],
+      phases: { 'erased-ink': 1 },
+    }).id,
+    'map-dial',
+  );
+  assert.equal(
+    getGuidanceTarget(level, {
+      collectedIds: ['erased-sign-1'],
+      activatedIds: ['map-dial'],
+      phases: { 'erased-ink': 2 },
+    }).id,
+    'erased-sign-2',
+  );
 });
 
 test('guides looking-glass phases instead of pointing at hidden shards', () => {

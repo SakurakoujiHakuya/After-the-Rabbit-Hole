@@ -23,7 +23,12 @@ import {
   updateMotionControl,
 } from './motionControls';
 import { getCollectionMessage, getDeathMessage } from './gameFeedback';
-import { getDynamicHint, getGuidanceObjectives, getStagedObjectives } from './objectives';
+import {
+  getDynamicHint,
+  getGuidanceObjectives,
+  getGuidanceTarget,
+  getStagedObjectives,
+} from './objectives';
 import {
   getActiveCarrySummary,
   getBranchGiftSummary,
@@ -676,6 +681,23 @@ export default function App() {
     phases,
     rotations,
   ]);
+  const guidanceTarget = useMemo(() => getGuidanceTarget(level, {
+    collectedIds: collected.map((item) => item.id),
+    activatedIds: activated,
+    paintedIds: painted,
+    rotations,
+    phases,
+    fragmentCount: collected.filter((item) => item.type === 'fragment').length,
+    identityRemaining,
+  }), [
+    activated,
+    collected,
+    identityRemaining,
+    level,
+    painted,
+    phases,
+    rotations,
+  ]);
 
   const startMotionCalibration = useCallback((preserveNeutral = true) => {
     motionStateRef.current = beginMotionCalibration(
@@ -1237,6 +1259,7 @@ export default function App() {
             onDeath={handleDeath}
             onLockedDoor={() => setToast(level.lockedHint || '门仍在等待缺少的证据。')}
             onComplete={handleComplete}
+            guidanceTarget={guidanceTarget}
           />
           <div className="corner corner-tl" />
           <div className="corner corner-tr" />

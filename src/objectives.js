@@ -1,6 +1,8 @@
 function findTarget(level, id) {
   return level.items?.find((item) => item.id === id)
-    || level.switches?.find((trigger) => trigger.id === id);
+    || level.switches?.find((trigger) => trigger.id === id)
+    || level.portals?.find((portal) => portal.id === id)
+    || level.paintables?.find((paintable) => paintable.id === id);
 }
 
 function findItem(level, id) {
@@ -44,6 +46,93 @@ function getPhaseValue(level, phases, phaseId) {
     0;
 }
 
+function goalTarget(level) {
+  return {
+    id: 'goal',
+    label: '出口',
+    x: level.goal.x + level.goal.w / 2,
+    y: level.goal.y + level.goal.h / 2,
+    r: Math.min(level.goal.w, level.goal.h) / 2,
+    kind: 'goal',
+  };
+}
+
+function targetWithMeta(target, kind = 'target') {
+  if (!target) return null;
+  return {
+    id: target.id,
+    label: target.label || target.word || target.id,
+    x: target.x,
+    y: target.y,
+    r: target.r || 12,
+    kind,
+  };
+}
+
+function firstMissingItemTarget(level, ids = [], collected) {
+  const id = ids.find((entry) => !collected.has(entry));
+  return targetWithMeta(findItem(level, id), 'item');
+}
+
+function getGuidanceStepTarget(level, step, context) {
+  const {
+    collected,
+    activated,
+    painted,
+    rotations,
+    phases,
+    fragmentCount,
+    requirements,
+  } = context;
+  if (step.target === 'fragments') {
+    if ((fragmentCount || 0) >= (requirements.fragments || 0)) return null;
+    const fragment = level.items?.find((item) => (
+      item.type === 'fragment' && !collected.has(item.id)
+    ));
+    return targetWithMeta(fragment, 'item');
+  }
+  if (step.target === 'painted') {
+    const id = requirements.painted?.find((entry) => !painted.has(entry));
+    return targetWithMeta(level.paintables?.find((paintable) => paintable.id === id), 'paintable');
+  }
+  if (step.target === 'rotation') {
+    if (rotations[step.id] === step.turn) return null;
+    return targetWithMeta(
+      level.switches?.find((trigger) => trigger.action === 'rotate' && trigger.target === step.id),
+      'switch',
+    );
+  }
+  if (step.target === 'phase') {
+    const current = getPhaseValue(level, phases, step.id);
+    if (current === step.phase) return null;
+    return targetWithMeta(
+      level.switches?.find((trigger) => trigger.action === 'phase' && trigger.target === step.id),
+      'switch',
+    );
+  }
+  const item = findItem(level, step.target);
+  if (item) {
+    if (collected.has(item.id)) return null;
+    const missingPhase = Object.entries(item.requiresPhases || {})
+      .find(([id, phase]) => getPhaseValue(level, phases, id) !== phase);
+    if (missingPhase) {
+      return targetWithMeta(
+        level.switches?.find((trigger) => trigger.action === 'phase' && trigger.target === missingPhase[0]),
+        'switch',
+      );
+    }
+    return targetWithMeta(item, 'item');
+  }
+  const trigger = findSwitch(level, step.target);
+  if (trigger) {
+    if (activated.has(trigger.id)) return null;
+    return firstMissingItemTarget(level, trigger.requiresItems, collected) ||
+      targetWithMeta(trigger, 'switch');
+  }
+  const target = findTarget(level, step.target);
+  return targetWithMeta(target, target?.pairId ? 'portal' : 'target');
+}
+
 function getGuidanceStepHint(level, step, context) {
   const {
     collected,
@@ -72,7 +161,11 @@ function getGuidanceStepHint(level, step, context) {
   }
   const item = findItem(level, step.target);
   if (item) {
-    return collected.has(item.id) ? '' : step.hint || `先寻找“${item.label || item.id}”。`;
+    if (collected.has(item.id)) return '';
+    const missingPhase = Object.entries(item.requiresPhases || {})
+      .find(([id, phase]) => getPhaseValue(level, phases, id) !== phase);
+    if (missingPhase) return `先切换地图层，再找“${item.label || item.id}”。`;
+    return step.hint || `先寻找“${item.label || item.id}”。`;
   }
   const trigger = findSwitch(level, step.target);
   if (trigger) {
@@ -199,6 +292,36 @@ function getPhaseRouteHint(level, context) {
     return `去中央镜盘${nextPhase === 0 ? '切回' : '切到'}${phaseLabel(level, phase.id, nextPhase)}。`;
   }
   return '';
+}
+
+function getPhaseRouteTarget(level, context) {
+  if (!level.phaseRoute?.length) return null;
+  const phaseControl = level.switches?.find((trigger) => trigger.action === 'phase');
+  const phase = level.phases?.find((entry) => entry.id === phaseControl?.target);
+  if (!phaseControl || !phase) return null;
+  const currentPhase = getPhaseValue(level, context.phases, phase.id);
+
+  for (const step of level.phaseRoute) {
+    if (step.target === 'goal') {
+      return currentPhase === step.phase
+        ? goalTarget(level)
+        : targetWithMeta(phaseControl, 'switch');
+    }
+    const item = findItem(level, step.target);
+    if (item) {
+      if (context.collected.has(item.id)) continue;
+      return currentPhase === step.phase
+        ? targetWithMeta(item, 'item')
+        : targetWithMeta(phaseControl, 'switch');
+    }
+    const trigger = findSwitch(level, step.target);
+    if (!trigger) continue;
+    if (context.activated.has(trigger.id)) continue;
+    return currentPhase === step.phase
+      ? targetWithMeta(trigger, 'switch')
+      : targetWithMeta(phaseControl, 'switch');
+  }
+  return null;
 }
 
 export function getStagedObjectives(level, collectedIds, activatedIds) {
@@ -334,4 +457,95 @@ export function getDynamicHint(level, state = {}) {
   }
 
   return level.readyHint || '条件已经齐了，去终点门前试试看。';
+}
+
+export function getGuidanceTarget(level, state = {}) {
+  const collected = new Set(state.collectedIds || []);
+  const activated = new Set(state.activatedIds || []);
+  const painted = new Set(state.paintedIds || []);
+  const rotations = state.rotations || {};
+  const phases = state.phases || {};
+  const requirements = level.goal?.requires || {};
+  if (!hasGoalRequirements(requirements) && !level.guidanceRoute?.length && !level.stealthRoute?.length) {
+    return null;
+  }
+
+  const context = {
+    collected,
+    activated,
+    painted,
+    rotations,
+    phases,
+    fragmentCount: state.fragmentCount || 0,
+    requirements,
+  };
+
+  if (level.echoReplay && !requirements.switches?.every((id) => activated.has(id))) {
+    const targetId = state.identityRemaining > 0 ? 'who-right' : 'who-left';
+    return targetWithMeta(findSwitch(level, targetId), 'switch');
+  }
+
+  for (const step of level.guidanceRoute || []) {
+    const target = getGuidanceStepTarget(level, step, context);
+    if (target) return target;
+  }
+
+  const phaseTarget = getPhaseRouteTarget(level, context);
+  if (phaseTarget) return phaseTarget;
+
+  const staged = getStagedObjectives(level, [...collected], [...activated]);
+  const currentStage = staged.find((entry) => entry.current);
+  if (currentStage) {
+    if (currentStage.id === 'goal') return goalTarget(level);
+    const target = findTarget(level, currentStage.id);
+    if (target?.requiresItems?.some((id) => !collected.has(id))) {
+      return firstMissingItemTarget(level, target.requiresItems, collected);
+    }
+    return targetWithMeta(target, target?.activationMode ? 'switch' : 'item');
+  }
+
+  if (requirements.fragments && (state.fragmentCount || 0) < requirements.fragments) {
+    return targetWithMeta(
+      level.items?.find((item) => item.type === 'fragment' && !collected.has(item.id)),
+      'item',
+    );
+  }
+
+  const missingItem = requirements.items
+    ?.map((id) => findItem(level, id))
+    .find((item) => item && !collected.has(item.id) && itemGateMissing(item, collected, activated).length === 0);
+  if (missingItem) return targetWithMeta(missingItem, 'item');
+
+  const missingPaintable = requirements.painted
+    ?.map((id) => level.paintables?.find((paintable) => paintable.id === id))
+    .find((paintable) => paintable && !painted.has(paintable.id));
+  if (missingPaintable) return targetWithMeta(missingPaintable, 'paintable');
+
+  const missingRotation = Object.entries(requirements.rotations || {})
+    .find(([id, turn]) => rotations[id] !== turn);
+  if (missingRotation) {
+    return targetWithMeta(
+      level.switches?.find((trigger) => trigger.action === 'rotate' && trigger.target === missingRotation[0]),
+      'switch',
+    );
+  }
+
+  const missingPhase = Object.entries(requirements.phases || {})
+    .find(([id, phase]) => phases[id] !== phase);
+  if (missingPhase) {
+    return targetWithMeta(
+      level.switches?.find((trigger) => trigger.action === 'phase' && trigger.target === missingPhase[0]),
+      'switch',
+    );
+  }
+
+  const missingSwitch = requirements.switches
+    ?.map((id) => findSwitch(level, id))
+    .find((trigger) => trigger && !activated.has(trigger.id));
+  if (missingSwitch) {
+    return firstMissingItemTarget(level, missingSwitch.requiresItems, collected) ||
+      targetWithMeta(missingSwitch, 'switch');
+  }
+
+  return goalTarget(level);
 }

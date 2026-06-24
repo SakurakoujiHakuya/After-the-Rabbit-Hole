@@ -235,6 +235,70 @@ function drawMotionCue(ctx, cue, time) {
   ctx.restore();
 }
 
+function drawGuidanceCompass(ctx, player, target, time) {
+  if (!player || !target) return;
+  const dx = target.x - player.x;
+  const dy = target.y - player.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance < 22) return;
+
+  const angle = Math.atan2(dy, dx);
+  const pulse = 0.72 + Math.sin(time / 340) * 0.18;
+  const targetRadius = Math.max(18, (target.r || 12) + 9 + Math.sin(time / 260) * 2);
+
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  ctx.strokeStyle = `rgba(226, 209, 154, ${0.26 + pulse * 0.18})`;
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([3, 7]);
+  ctx.beginPath();
+  ctx.arc(target.x, target.y, targetRadius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = `rgba(238, 218, 150, ${0.12 + pulse * 0.1})`;
+  ctx.beginPath();
+  ctx.arc(target.x, target.y, Math.max(7, targetRadius * 0.28), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(player.x, player.y);
+  ctx.rotate(angle);
+  const arrowDistance = player.radius + 21;
+  ctx.translate(arrowDistance, 0);
+  ctx.shadowColor = 'rgba(232, 214, 158, .75)';
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = `rgba(241, 220, 158, ${0.8 + pulse * 0.16})`;
+  ctx.strokeStyle = 'rgba(58, 45, 32, .7)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(10, 0);
+  ctx.lineTo(-6, -6);
+  ctx.lineTo(-3, 0);
+  ctx.lineTo(-6, 6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(239, 225, 183, .84)';
+  ctx.font = '9px "Noto Serif SC", serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const label = distance > 260 ? '很远' : distance > 140 ? '不远' : '附近';
+  const badgeX = Math.min(WORLD.width - 46, Math.max(46, player.x + Math.cos(angle) * 45));
+  const badgeY = Math.min(WORLD.height - 18, Math.max(18, player.y + Math.sin(angle) * 45));
+  roundedRect(ctx, badgeX - 24, badgeY - 9, 48, 18, 9);
+  ctx.fillStyle = 'rgba(15, 19, 32, .62)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(220, 196, 130, .26)';
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(239, 225, 183, .84)';
+  ctx.fillText(label, badgeX, badgeY + 0.5);
+  ctx.restore();
+}
+
 function drawZone(ctx, zone, time) {
   ctx.save();
   if (zone.effect === 'time') {
@@ -2072,6 +2136,7 @@ function MazeGameCanvas({
   onDeath,
   onLockedDoor,
   onComplete,
+  guidanceTarget,
 }) {
   const canvasRef = useRef(null);
   const stateRef = useRef(null);
@@ -3016,6 +3081,7 @@ function MazeGameCanvas({
           echo: false,
           vanish: effects.vanish,
         });
+        drawGuidanceCompass(ctx, state.player, guidanceTarget, time);
         state.particles = drawParticles(ctx, state.particles, dt);
         if (level.stealthConfig) {
           drawStealthHud(ctx, state.stealthAlert, effects.vanish);
@@ -3032,7 +3098,7 @@ function MazeGameCanvas({
       cancelAnimationFrame(animationFrame);
       window.removeEventListener('resize', resize);
     };
-  }, [gravityRef, level, paused, resetToken]);
+  }, [gravityRef, guidanceTarget, level, paused, resetToken]);
 
   return <canvas ref={canvasRef} className="game-canvas" aria-label={`${level.name}迷宫`} />;
 }
